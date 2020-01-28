@@ -31,13 +31,13 @@ if ( ! file.exists('../data/satpathy2016/barcodes.tsv')) {
              remove = FALSE)  
 }
 if ( ! file.exists('../data/satpathy2016/matrix.mtx')){
-        download.file(matrix_url, destfile = '../data/hcv/satpathy2016/matrix.mtx.gz')
+        download.file(matrix_url, destfile = '../data/satpathy2016/matrix.mtx.gz')
         gunzip('../data/hcv/satpathy2016/matrix.mtx.gz', 
                destname = '../data/hcv/satpathy2016/matrix.mtx', 
                remove = FALSE)  
 }
 if ( ! file.exists('../data/satpathy2016/genes.tsv')){
-        download.file(peaks_url, destfile = '../data/hcv/satpathy2016/genes.tsv.gz')
+        download.file(peaks_url, destfile = '../data/satpathy2016/genes.tsv.gz')
         gunzip('../data/hcv/satpathy2016/genes.tsv.gz', 
                destname = '../data/hcv/satpathy2016/genes.tsv',
                remove = FALSE) 
@@ -45,5 +45,26 @@ if ( ! file.exists('../data/satpathy2016/genes.tsv')){
 ```
 
 
+```{r loading_data}
+## barcodes
+barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
+                       header = TRUE)  
+barcodes.s <- barcodes$Barcodes
+
+## peaks
+peaks <- read.table('../data/satpathy2016/genes.tsv', header = TRUE)
+peaks <- as.character(peaks$Feature)
+
+## counts
+counts <- readMM('../data/satpathy2016/matrix.mtx')
+rownames(counts) <- as.character(peaks)
+colnames(counts) <- barcodes.s
 ```
+
+```{r run_cistopic}
+cisTopicObject <- createcisTopicObject(counts[1:100,1:100], project.name='AdBrCortex_accessibility')
+cisTopicObject <- addCellMetadata(cisTopicObject, cell.data = barcodes)
 ```
+
+
+
