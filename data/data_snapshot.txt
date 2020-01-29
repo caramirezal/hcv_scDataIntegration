@@ -1,0 +1,10 @@
+data
+data/.DS_Store
+data/data_snapshot.txt
+data/satpathy2016
+data/satpathy2016/.DS_Store
+data/satpathy2016/genes.tsv
+data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds
+data/satpathy2016/barcodes.tsv
+data/satpathy2016/matrix.mtx
+data/Homo_sapiens.GRCh38.98.gtf.gz
