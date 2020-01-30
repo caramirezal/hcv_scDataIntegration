@@ -23,7 +23,7 @@ remove(counts)
 counts_seu <- NormalizeData(counts_seu)
 counts_seu <- FindVariableFeatures(counts_seu, 
                                      selection.method = 'vst',
-                                     nfeatures = 10000)
+                                     nfeatures = 100000)
 var_features <- VariableFeatures(counts_seu)
 counts_fs <- counts_seu@assays$RNA@counts[var_features, ]
 
@@ -37,3 +37,5 @@ activity.matrix <- CreateGeneActivityMatrix(
 )
 
 saveRDS(activity.matrix, '../data/satpathy2016/activity_matrix.RDS')
+gc()
+
