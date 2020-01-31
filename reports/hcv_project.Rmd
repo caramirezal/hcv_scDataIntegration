@@ -1,0 +1,114 @@
+---
+title: "Heterogeneity in HCV response at the single cell level"
+author: "Health Data Science Unit"
+date: "`r date()`"
+output: 
+    html_document:
+            code_folding: hide
+---
+
+```{r setup, include=FALSE}
+library(Matrix)
+library(dplyr)
+library(uwot)
+library(ggplot2)
+library(GEOquery)
+library(Seurat)
+source('../scripts//pipeline.R')
+
+knitr::opts_chunk$set(warning = FALSE,
+                      message = FALSE,
+                      cache = TRUE,
+                      fig.width = 10,
+                      fig.height = 7, 
+                      echo = FALSE,
+                      cache.lazy = FALSE)
+```
+
+## Eltahla AA data
+
+
+```{r data_eltahla_loading, echo=TRUE}
+## Raw counts files were downloaded here:
+## https://www.ebi.ac.uk/gxa/sc/experiments/E-MTAB-4850/downloads?geneId=ENSG00000107779
+
+## loading data from Eltahla AA et al, 2016
+## Counts matrix
+rna <- readMM('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx')
+col_names <- readLines('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx_cols') 
+row_names <- read.table('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx_rows')
+#rna <- as.matrix(rna)
+colnames(rna) <- col_names
+rownames(rna) <- row_names$V1
+## Metadata
+metadata <- read.table('../data/eltahla2016/E-MTAB-4850.sdrf.txt', 
+                       sep = '\t', header = TRUE, stringsAsFactors = FALSE)
+colnames(metadata) <- gsub('\\.', '', colnames(metadata))
+metadata.s <- unique(select(metadata, 
+                            CommentBioSD_SAMPLE, 
+                            SourceName,
+                            Characteristicscelltype))
+```
+
+
+```{r umap_vis}
+rna_umap <- umap(t(as.matrix(rna)), metric = 'cosine')
+colnames(rna_umap) <- c('UMAP1', 'UMAP2')
+rna_umap.df <- as.data.frame(rna_umap)
+rna_umap.df <- mutate(rna_umap.df, id=col_names)
+## length(intersect(metadata.s$CommentBioSD_SAMPLE, col_names)) ## check metatata intersection with colnames is unique
+metadata.s <- rename(metadata.s, id=CommentBioSD_SAMPLE)
+rna_umap.df <- merge(rna_umap.df, metadata.s)
+rna_umap.df <- mutate(rna_umap.df, origin= gsub('[0-9]', '', SourceName))
+rna_umap.df <- mutate(rna_umap.df, origin= trimws(origin))
+ggplot(data = rna_umap.df) +
+        geom_point(aes(UMAP1, UMAP2, colour=origin, size=4)) + theme_bw()
+```
+
+## Satpathy AT data
+
+```{r satpathy_loading}
+## barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+```
+
+```{r data_vis, fig.height=7, fig.width=10}
+tcells_ann <- data.frame('UMAP1'=summaryTCells$UMAP1,
+                         'UMAP2'=summaryTCells$UMAP2,
+                         'Clusters'=summaryTCells$T_Cell_Cluster)
+ggplot(data = tcells_ann) +
+        geom_point(aes(UMAP1, UMAP2, colour=Clusters), alpha=0.3, size=0.5) + theme_bw()
+```
+
+
+```{r}
+activity_matrix <- readRDS('../data/satpathy2016/activity_matrix.RDS')
+atac <- CreateSeuratObject(
+        counts = activity_matrix,
+        assay = 'ATAC',
+        project = 'atac'
+)
+## Adding estimated gene activity matrix
+atac[['activity']] <- CreateAssayObject(
+        counts = activity_matrix
+)
+DefaultAssay(atac) <- 'activity'
+atac <- st_workflow(atac)
+```
+
+```{r}
+rna <- as.matrix(rna.s)
+rna_seu <- CreateSeuratObject(counts = rna, assay = 'rna', project = 'hcv', min.cells = 1, min.features = 1)
+rna_seu <- NormalizeData(rna_seu)
+rna_seu <- FindVariableFeatures(rna_seu, selection.method = 'vst', nfeatures = 1000)
+rna_seu <- ScaleData(rna_seu, verbose = FALSE)
+rna_seu <- RunPCA(rna_seu, npcs = 30, verbose = FALSE)
+rna_seu <- RunUMAP(rna_seu, reduction = "pca", dims = 1:30)
+rna_seu <- FindNeighbors(rna_seu, dims = 1:30, verbose = FALSE)
+rna_seu <- FindClusters(rna_seu, resolution= 0.5, verbose = FALSE)
+```
+
+```{r}
+hcv <- list(rna.s, atac)
+anchors <- FindIntegrationAnchors(hcv, dims = 1:20)
+```
