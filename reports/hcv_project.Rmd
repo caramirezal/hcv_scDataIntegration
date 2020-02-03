@@ -137,8 +137,76 @@ DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap',
 
 ```{r}
 barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fbarcodes%2Etsv%2Egz'
-if (! file.exists('../data/miller2019/GSE122712_barcodes.tsv.gz')){
+genes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fgenes%2Etsv%2Egz'
+counts_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fmatrix%2Emtx%2Egz' 
+if (! file.exists('../data/miller2019/barcodes.tsv')){
         download.file(barcodes_url, destfile = '../data/miller2019/GSE122712_barcodes.tsv.gz')
+        gunzip('../data/miller2019/GSE122712_barcodes.tsv.gz',
+               destname = '../data/miller2019/barcodes.tsv', 
+               remove = FALSE)
 }
+if (! file.exists('../data/miller2019/genes.tsv')) {
+        download.file(genes_url, destfile = '../data/miller2019/GSE122712_genes.tsv.gz')
+        gunzip('../data/miller2019/GSE122712_genes.tsv.gz', 
+               destname = '../data/miller2019/genes.tsv', 
+               remove = FALSE)
+}
+if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
+        download.file(counts_url, destfile = '../data/miller2019/matrix.mtx.gz')
+        gunzip('../data/miller2019/matrix.mtx.gz', 
+               destname = '../data/miller2019/matrix.mtx', 
+               remove = FALSE)
+}
+```
 
+```{r seurat_object}
+dir.create('../data/miller2019_upper_Case')
+file.copy('../data/miller2019/matrix.mtx', '../data/miller2019_upper_Case/')
+file.copy('../data/miller2019/barcodes.tsv', '../data/miller2019_upper_Case/')
+genes_lc <- read.table('../data/miller2019/genes.tsv', header = FALSE)
+genes_lc$V2 <- toupper(genes_lc$V2)
+write_tsv(genes_lc, '../data/miller2019_upper_Case/genes.tsv', col_names = FALSE)
+rna_lcmv <- Read10X('../data/miller2019_upper_Case/')
+rna_seu <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
+```
+
+```{r standard_preprocessing}
+rna_seu <- NormalizeData(rna_seu)
+rna_seu <- FindVariableFeatures(rna_seu, selection.method = 'vst', nfeatures = 3000)
+rna_seu <- ScaleData(rna_seu, verbose = FALSE)
+rna_seu <- RunPCA(rna_seu, npcs = 30, verbose = FALSE)
+rna_seu <- RunUMAP(rna_seu, reduction = "pca", dims = 1:30)
+rna_seu <- FindNeighbors(rna_seu, dims = 1:30, verbose = FALSE)
+rna_seu <- FindClusters(rna_seu, resolution= 0.1, verbose = FALSE)
+```
+
+## Miller 2019 
+
+```{r vis}
+DimPlot(rna_seu, reduction = 'umap', group.by = 'seurat_clusters')
+```
+
+## Integration
+
+```{r miller_satpathy_int}
+hcv <- list(rna_seu, atac)
+anchors <- FindIntegrationAnchors(hcv, dims = 1:20)
+integrated <- IntegrateData(anchorset = anchors,
+                                     dims = 1:20, k.weight = 10)
+
+# Visualisation of the integrated data
+DefaultAssay(integrated) <- "integrated"
+integrated <- ScaleData(integrated, 
+                        verbose = FALSE)
+integrated <- RunPCA(integrated, 
+                     npcs = 30, 
+                     verbose = FALSE)
+integrated <- RunUMAP(integrated, 
+                      reduction = "pca", 
+                      dims = 1:30)
+```
+
+```{r miller_satpathy_vis}
+DimPlot(integrated, group.by = 'orig.ident', reduction = 'pca', 
+        label = FALSE)
 ```
