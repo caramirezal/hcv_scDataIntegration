@@ -81,7 +81,7 @@ ggplot(data = tcells_ann) +
 ```
 
 
-```{r}
+```{r eval=TRUE}
 activity_matrix <- readRDS('../data/satpathy2016/activity_matrix.RDS')
 atac <- CreateSeuratObject(
         counts = activity_matrix,
@@ -97,7 +97,8 @@ atac <- st_workflow(atac)
 ```
 
 ```{r}
-rna <- as.matrix(rna.s)
+rna.s <- readRDS('../data/eltahla2016/rna.rds')
+rna <- rna.s[-133, ]
 rna_seu <- CreateSeuratObject(counts = rna, assay = 'rna', project = 'hcv', min.cells = 1, min.features = 1)
 rna_seu <- NormalizeData(rna_seu)
 rna_seu <- FindVariableFeatures(rna_seu, selection.method = 'vst', nfeatures = 1000)
@@ -109,6 +110,35 @@ rna_seu <- FindClusters(rna_seu, resolution= 0.5, verbose = FALSE)
 ```
 
 ```{r}
-hcv <- list(rna.s, atac)
+hcv <- list(rna_seu, atac)
 anchors <- FindIntegrationAnchors(hcv, dims = 1:20)
+integrated <- IntegrateData(anchorset = anchors,
+                                     dims = 1:20, k.weight = 10)
+
+# Visualisation of the integrated data
+DefaultAssay(integrated) <- "integrated"
+integrated <- ScaleData(integrated, 
+                        verbose = FALSE)
+integrated <- RunPCA(integrated, 
+                     npcs = 30, 
+                     verbose = FALSE)
+integrated <- RunUMAP(integrated, 
+                      reduction = "pca", 
+                      dims = 1:30)
+```
+
+## Integration of Eltahla2016 and Miller2019 datasets
+
+```{r}
+DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap', 
+        label = FALSE)
+```
+
+
+```{r}
+barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fbarcodes%2Etsv%2Egz'
+if (! file.exists('../data/miller2019/GSE122712_barcodes.tsv.gz')){
+        download.file(barcodes_url, destfile = '../data/miller2019/GSE122712_barcodes.tsv.gz')
+}
+
 ```
