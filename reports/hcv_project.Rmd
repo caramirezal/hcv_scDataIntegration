@@ -25,45 +25,7 @@ knitr::opts_chunk$set(warning = FALSE,
                       cache.lazy = FALSE)
 ```
 
-## Eltahla AA data
 
-
-```{r data_eltahla_loading, echo=TRUE}
-## Raw counts files were downloaded here:
-## https://www.ebi.ac.uk/gxa/sc/experiments/E-MTAB-4850/downloads?geneId=ENSG00000107779
-
-## loading data from Eltahla AA et al, 2016
-## Counts matrix
-rna <- readMM('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx')
-col_names <- readLines('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx_cols') 
-row_names <- read.table('../data/eltahla2016/E-MTAB-4850.aggregated_filtered_counts.mtx_rows')
-#rna <- as.matrix(rna)
-colnames(rna) <- col_names
-rownames(rna) <- row_names$V1
-## Metadata
-metadata <- read.table('../data/eltahla2016/E-MTAB-4850.sdrf.txt', 
-                       sep = '\t', header = TRUE, stringsAsFactors = FALSE)
-colnames(metadata) <- gsub('\\.', '', colnames(metadata))
-metadata.s <- unique(select(metadata, 
-                            CommentBioSD_SAMPLE, 
-                            SourceName,
-                            Characteristicscelltype))
-```
-
-
-```{r umap_vis}
-rna_umap <- umap(t(as.matrix(rna)), metric = 'cosine')
-colnames(rna_umap) <- c('UMAP1', 'UMAP2')
-rna_umap.df <- as.data.frame(rna_umap)
-rna_umap.df <- mutate(rna_umap.df, id=col_names)
-## length(intersect(metadata.s$CommentBioSD_SAMPLE, col_names)) ## check metatata intersection with colnames is unique
-metadata.s <- rename(metadata.s, id=CommentBioSD_SAMPLE)
-rna_umap.df <- merge(rna_umap.df, metadata.s)
-rna_umap.df <- mutate(rna_umap.df, origin= gsub('[0-9]', '', SourceName))
-rna_umap.df <- mutate(rna_umap.df, origin= trimws(origin))
-ggplot(data = rna_umap.df) +
-        geom_point(aes(UMAP1, UMAP2, colour=origin, size=4)) + theme_bw()
-```
 
 ## Satpathy AT data
 
@@ -71,6 +33,8 @@ ggplot(data = rna_umap.df) +
 ## barcodes
 summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
 ```
+
+## Provided visualization
 
 ```{r data_vis, fig.height=7, fig.width=10}
 tcells_ann <- data.frame('UMAP1'=summaryTCells$UMAP1,
@@ -81,7 +45,7 @@ ggplot(data = tcells_ann) +
 ```
 
 
-```{r eval=TRUE}
+```{r}
 activity_matrix <- readRDS('../data/satpathy2016/activity_matrix.RDS')
 atac <- CreateSeuratObject(
         counts = activity_matrix,
@@ -93,120 +57,54 @@ atac[['activity']] <- CreateAssayObject(
         counts = activity_matrix
 )
 DefaultAssay(atac) <- 'activity'
-atac <- st_workflow(atac)
+atac <- AddMetaData(atac, metadata = tcells_ann)
+atac$'tech' <- 'ATAC'
+atac <- NormalizeData(atac)
+atac <- ScaleData(atac)
+DefaultAssay(atac) <- "ATAC"
+VariableFeatures(atac) <- names(which(Matrix::rowSums(atac) > 100))
+atac <- RunLSI(atac, n = 50, scale.max = NULL)
+atac <- RunUMAP(atac, reduction = "lsi", dims = 1:50)
 ```
 
 ```{r}
-rna.s <- readRDS('../data/eltahla2016/rna.rds')
-rna <- rna.s[-133, ]
-rna_seu <- CreateSeuratObject(counts = rna, assay = 'rna', project = 'hcv', min.cells = 1, min.features = 1)
-rna_seu <- NormalizeData(rna_seu)
-rna_seu <- FindVariableFeatures(rna_seu, selection.method = 'vst', nfeatures = 1000)
-rna_seu <- ScaleData(rna_seu, verbose = FALSE)
-rna_seu <- RunPCA(rna_seu, npcs = 30, verbose = FALSE)
-rna_seu <- RunUMAP(rna_seu, reduction = "pca", dims = 1:30)
-rna_seu <- FindNeighbors(rna_seu, dims = 1:30, verbose = FALSE)
-rna_seu <- FindClusters(rna_seu, resolution= 0.5, verbose = FALSE)
+atac$orig.ident <- tcells_ann$Clusters
+atac.vis <- DimPlot(atac, group.by = 'orig.ident', reduction = 'umap', label = TRUE) + NoLegend() + ggtitle('ATAC')
 ```
 
-```{r}
-hcv <- list(rna_seu, atac)
-anchors <- FindIntegrationAnchors(hcv, dims = 1:20)
-integrated <- IntegrateData(anchorset = anchors,
-                                     dims = 1:20, k.weight = 10)
-
-# Visualisation of the integrated data
-DefaultAssay(integrated) <- "integrated"
-integrated <- ScaleData(integrated, 
-                        verbose = FALSE)
-integrated <- RunPCA(integrated, 
-                     npcs = 30, 
-                     verbose = FALSE)
-integrated <- RunUMAP(integrated, 
-                      reduction = "pca", 
-                      dims = 1:30)
-```
-
-## Integration of Eltahla2016 and Miller2019 datasets
-
-```{r}
-DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap', 
-        label = FALSE)
-```
-
-
-```{r}
-barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fbarcodes%2Etsv%2Egz'
-genes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fgenes%2Etsv%2Egz'
-counts_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fmatrix%2Emtx%2Egz' 
-if (! file.exists('../data/miller2019/barcodes.tsv')){
-        download.file(barcodes_url, destfile = '../data/miller2019/GSE122712_barcodes.tsv.gz')
-        gunzip('../data/miller2019/GSE122712_barcodes.tsv.gz',
-               destname = '../data/miller2019/barcodes.tsv', 
-               remove = FALSE)
-}
-if (! file.exists('../data/miller2019/genes.tsv')) {
-        download.file(genes_url, destfile = '../data/miller2019/GSE122712_genes.tsv.gz')
-        gunzip('../data/miller2019/GSE122712_genes.tsv.gz', 
-               destname = '../data/miller2019/genes.tsv', 
-               remove = FALSE)
-}
-if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
-        download.file(counts_url, destfile = '../data/miller2019/matrix.mtx.gz')
-        gunzip('../data/miller2019/matrix.mtx.gz', 
-               destname = '../data/miller2019/matrix.mtx', 
-               remove = FALSE)
-}
-```
+## Miller 2019
 
 ```{r seurat_object}
-dir.create('../data/miller2019_upper_Case')
-file.copy('../data/miller2019/matrix.mtx', '../data/miller2019_upper_Case/')
-file.copy('../data/miller2019/barcodes.tsv', '../data/miller2019_upper_Case/')
-genes_lc <- read.table('../data/miller2019/genes.tsv', header = FALSE)
-genes_lc$V2 <- toupper(genes_lc$V2)
-write_tsv(genes_lc, '../data/miller2019_upper_Case/genes.tsv', col_names = FALSE)
 rna_lcmv <- Read10X('../data/miller2019_upper_Case/')
-rna_seu <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
+rna <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
 ```
 
 ```{r standard_preprocessing}
-rna_seu <- NormalizeData(rna_seu)
-rna_seu <- FindVariableFeatures(rna_seu, selection.method = 'vst', nfeatures = 3000)
-rna_seu <- ScaleData(rna_seu, verbose = FALSE)
-rna_seu <- RunPCA(rna_seu, npcs = 30, verbose = FALSE)
-rna_seu <- RunUMAP(rna_seu, reduction = "pca", dims = 1:30)
-rna_seu <- FindNeighbors(rna_seu, dims = 1:30, verbose = FALSE)
-rna_seu <- FindClusters(rna_seu, resolution= 0.1, verbose = FALSE)
+rna <- NormalizeData(rna)
+rna <- FindVariableFeatures(rna, selection.method = 'vst', nfeatures = 3000)
+rna <- ScaleData(rna, verbose = FALSE)
+rna <- RunPCA(rna, npcs = 30, verbose = FALSE)
+rna <- RunUMAP(rna, reduction = "pca", dims = 1:30)
+rna <- FindNeighbors(rna, dims = 1:30, verbose = FALSE)
+rna <- FindClusters(rna, resolution= 0.1, verbose = FALSE)
 ```
 
-## Miller 2019 
 
 ```{r vis}
-DimPlot(rna_seu, reduction = 'umap', group.by = 'seurat_clusters')
+rna.vis <- DimPlot(rna, reduction = 'umap', group.by = 'seurat_clusters', label = TRUE) + NoLegend() + ggtitle('RNA')
 ```
 
-## Integration
-
-```{r miller_satpathy_int}
-hcv <- list(rna_seu, atac)
-anchors <- FindIntegrationAnchors(hcv, dims = 1:20)
-integrated <- IntegrateData(anchorset = anchors,
-                                     dims = 1:20, k.weight = 10)
-
-# Visualisation of the integrated data
-DefaultAssay(integrated) <- "integrated"
-integrated <- ScaleData(integrated, 
-                        verbose = FALSE)
-integrated <- RunPCA(integrated, 
-                     npcs = 30, 
-                     verbose = FALSE)
-integrated <- RunUMAP(integrated, 
-                      reduction = "pca", 
-                      dims = 1:30)
+```{r comb_plot}
+CombinePlots(plots = list(rna.vis, atac.vis))
 ```
 
-```{r miller_satpathy_vis}
-DimPlot(integrated, group.by = 'orig.ident', reduction = 'pca', 
-        label = FALSE)
+```{r}
+transfer.anchors <- FindTransferAnchors(reference = rna, 
+                                        query = atac, 
+                                        features = VariableFeatures(object = pbmc.rna), 
+                                        reference.assay = "rna", 
+                                        query.assay = "activity", 
+                                        reduction = "cca")
 ```
+
+
