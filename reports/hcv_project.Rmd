@@ -113,4 +113,37 @@ transfer.anchors <- FindTransferAnchors(reference = rna,
                                         reduction = "cca")
 ```
 
+```{r}
+transfer.anchors <- readRDS('../data/transfer.anchors.rds')
+```
 
+
+```{r}
+celltype.predictions <- TransferData(anchorset = transfer.anchors, 
+                                     refdata = rna$orig.ident, 
+                                     weight.reduction = atac[["lsi"]])
+atac <- AddMetaData(atac, metadata = celltype.predictions)
+```
+
+```{r}
+hist(atac$prediction.score.max)
+table(atac$prediction.score.max > 0.02)
+atac.filtered <- subset(atac, subset = prediction.score.max > 0.5)
+atac.filtered$predicted.id <- factor(atac.filtered$predicted.id, levels = levels(rna))
+DimPlot(atac.filtered, group.by = 'predicted.id', label = TRUE)
+```
+
+```{r eval=FALSE}
+genes.use <- VariableFeatures(rna)
+refdata <- GetAssayData(rna, assay = "rna", slot = "data")[genes.use, ]
+imputation <- TransferData(anchorset = transfer.anchors, 
+                           refdata = refdata, 
+                           weight.reduction = atac[["lsi"]])
+atac[["RNA"]] <- imputation
+coembed <- merge(x = rna, y = atac)
+coembed <- NormalizeData(coembed)
+coembed <- ScaleData(coembed, features = genes.use, do.scale = FALSE)
+coembed <- RunPCA(coembed, features = genes.use, verbose = FALSE)
+coembed <- RunUMAP(coembed, dims = 1:50)
+DimPlot(coembed, group.by = 'orig.ident', reduction = 'umap')
+```
