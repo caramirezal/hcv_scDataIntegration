@@ -91,6 +91,7 @@ rna <- FindClusters(rna, resolution= 0.1, verbose = FALSE)
 
 
 ```{r vis}
+rna$orig.ident <- rna$seurat_clusters
 rna.vis <- DimPlot(rna, reduction = 'umap', group.by = 'seurat_clusters', label = TRUE) + NoLegend() + ggtitle('RNA')
 ```
 
@@ -98,7 +99,12 @@ rna.vis <- DimPlot(rna, reduction = 'umap', group.by = 'seurat_clusters', label 
 CombinePlots(plots = list(rna.vis, atac.vis))
 ```
 
-```{r}
+```{r saving_processed_data}
+saveRDS(rna, '../data/rna_seurat_processed_miller2019.rds')
+saveRDS(atac, '../data/atac_seurat_processed_miller2019.rds')
+```
+
+```{r eval=FALSE}
 transfer.anchors <- FindTransferAnchors(reference = rna, 
                                         query = atac, 
                                         features = VariableFeatures(object = pbmc.rna), 
