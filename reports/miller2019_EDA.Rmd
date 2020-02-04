@@ -2,16 +2,18 @@
 title: "Miller 2019 EDA"
 author: "Health Data Science Unit"
 date: "`r date()`"
-output: html_document
+output: 
+    html_document:
+            code_folding: hide
 ---
 
-```{r}
+```{r include=FALSE}
 library(Seurat)
 library(tidyverse)
 
-knitr::opts_chunk$set(message = TRUE, 
-                      eval = TRUE, 
-                      warning = TRUE)
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE,
+                      cache = TRUE)
 ```
 
 ```{r}
@@ -38,8 +40,70 @@ if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
 }
 ```
 
-```{r}
+```{r seurat_object}
 rna_lcmv <- Read10X('../data/miller2019/')
-rna_seu <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 1)
+rna <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
 ```
 
+```{r standard_preprocessing}
+rna <- NormalizeData(rna)
+rna <- FindVariableFeatures(rna, selection.method = 'vst', nfeatures = 3000)
+rna <- ScaleData(rna, verbose = FALSE)
+rna <- RunPCA(rna, npcs = 30, verbose = FALSE)
+rna <- RunUMAP(rna, reduction = "pca", dims = 1:30)
+rna <- FindNeighbors(rna, dims = 1:30, verbose = FALSE)
+rna <- FindClusters(rna, resolution= 0.1, verbose = FALSE)
+```
+
+## Miller 2019 
+
+```{r vis}
+DimPlot(rna, reduction = 'umap', group.by = 'seurat_clusters')
+```
+
+
+## Cluster indentification
+
+### Cluster 3 - Proliferating cells
+
+```{r}
+FeaturePlot(rna, features = c('Mki67', 'Top2a'))
+```
+
+### Cluster 0 - Effector-like T cells
+
+```{r}
+FeaturePlot(rna, features = c('Cx3cr1', 'Klrc1'))
+```
+
+### Cluster 4 - Naive T cells
+
+```{r}
+FeaturePlot(rna, features = c('Ccr7', 'Lef1'))
+```
+
+### Cluster 2 - Progenitor Exh
+
+```{r}
+FeaturePlot(rna, features = c('Tcf7', 'Id3'))
+```
+
+### Cluster 1 - Terminally Exh
+
+```{r}
+FeaturePlot(rna, features = c('Havcr2', 'Entpd1', 'Cd244'))
+```
+
+```{r annotate_clusters}
+rna$orig.ident <- rna$seurat_clusters
+rna_ann <- data.frame('cluster' = rna$orig.ident,
+                      'cell_type' = plyr::mapvalues(x = rna$orig.ident,
+                                                    from = as.factor(c(3,0,4,2,1)), 
+                                                    to = c('Proliferating', 'Effector', 'Naive',
+                                                           'Progenitor Ex', 'Terminally Ex')
+                                                    )
+)
+rna <- AddMetaData(rna, metadata = rna_ann)
+rna.vis <- DimPlot(rna, group.by = 'cell_type', reduction = 'umap', label = TRUE) + NoLegend() + ggtitle('RNA')
+rna.vis
+```
