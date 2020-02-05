@@ -166,4 +166,9 @@ coembed <- RunUMAP(coembed, dims = 1:50)
 DimPlot(coembed, group.by = 'orig.ident', reduction = 'umap')
 ```
 
+```{r}
+gc()
+coembed <- readRDS('../data/coembed_satpathy_miller.rds')
+```
+
 
