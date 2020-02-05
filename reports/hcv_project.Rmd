@@ -34,15 +34,21 @@ knitr::opts_chunk$set(warning = FALSE,
 summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
 ```
 
-## Provided visualization
 
-```{r data_vis, fig.height=7, fig.width=10}
-tcells_ann <- data.frame('UMAP1'=summaryTCells$UMAP1,
-                         'UMAP2'=summaryTCells$UMAP2,
-                         'Clusters'=summaryTCells$T_Cell_Cluster)
-ggplot(data = tcells_ann) +
-        geom_point(aes(UMAP1, UMAP2, colour=Clusters), alpha=0.3, size=0.5) + theme_bw()
+```{r create_annotations}
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
 ```
+
+
 
 
 ```{r}
@@ -57,7 +63,7 @@ atac[['activity']] <- CreateAssayObject(
         counts = activity_matrix
 )
 DefaultAssay(atac) <- 'activity'
-atac <- AddMetaData(atac, metadata = tcells_ann)
+atac$orig.ident <- cluster_cell_types
 atac$'tech' <- 'ATAC'
 atac <- NormalizeData(atac)
 atac <- ScaleData(atac)
@@ -67,12 +73,11 @@ atac <- RunLSI(atac, n = 50, scale.max = NULL)
 atac <- RunUMAP(atac, reduction = "lsi", dims = 1:50)
 ```
 
-```{r}
-atac$orig.ident <- tcells_ann$Clusters
+```{r atac_vis}
+DefaultAssay(atac) <- 'activity'
 atac.vis <- DimPlot(atac, group.by = 'orig.ident', reduction = 'umap', label = TRUE) + NoLegend() + ggtitle('ATAC')
 ```
 
-## Miller 2019
 
 ```{r seurat_object}
 rna_lcmv <- Read10X('../data/miller2019_upper_Case/')
@@ -90,16 +95,27 @@ rna <- FindClusters(rna, resolution= 0.1, verbose = FALSE)
 ```
 
 
-```{r vis}
+
+```{r annotate_clusters}
 rna$orig.ident <- rna$seurat_clusters
-rna.vis <- DimPlot(rna, reduction = 'umap', group.by = 'seurat_clusters', label = TRUE) + NoLegend() + ggtitle('RNA')
+rna_ann <- data.frame('cluster' = rna$orig.ident,
+                      'cell_type' = plyr::mapvalues(x = rna$orig.ident,
+                                                    from = as.factor(c(3,0,4,2,1)), 
+                                                    to = c('Proliferating', 'Effector', 'Naive',
+                                                           'Progenitor Ex', 'Terminally Ex')
+                                                    )
+)
+rna <- AddMetaData(rna, metadata = rna_ann)
+rna$orig.ident <- rna$cell_type
+saveRDS(rna_ann, '../data/rna_annotations_miller2019.rds')
+rna.vis <- DimPlot(rna, group.by = 'cell_type', reduction = 'umap', label = TRUE) + NoLegend() + ggtitle('RNA')
 ```
 
 ```{r comb_plot}
 CombinePlots(plots = list(rna.vis, atac.vis))
 ```
 
-```{r saving_processed_data}
+```{r saving_processed_data, eval=FALSE}
 saveRDS(rna, '../data/rna_seurat_processed_miller2019.rds')
 saveRDS(atac, '../data/atac_seurat_processed_miller2019.rds')
 ```
@@ -117,6 +133,8 @@ transfer.anchors <- FindTransferAnchors(reference = rna,
 transfer.anchors <- readRDS('../data/transfer.anchors.rds')
 ```
 
+```{r rna_annotations, eval=FALSE}
+```
 
 ```{r}
 celltype.predictions <- TransferData(anchorset = transfer.anchors, 
@@ -126,10 +144,10 @@ atac <- AddMetaData(atac, metadata = celltype.predictions)
 ```
 
 ```{r}
-hist(atac$prediction.score.max)
-table(atac$prediction.score.max > 0.02)
-atac.filtered <- subset(atac, subset = prediction.score.max > 0.5)
-atac.filtered$predicted.id <- factor(atac.filtered$predicted.id, levels = levels(rna))
+#hist(atac$prediction.score.max)
+#table(atac$prediction.score.max > 0.02)
+atac.filtered <- subset(atac, subset = prediction.score.max > 0.005)
+#atac.filtered$predicted.id <- factor(atac.filtered$predicted.id, levels = levels(rna))
 DimPlot(atac.filtered, group.by = 'predicted.id', label = TRUE)
 ```
 
@@ -147,3 +165,5 @@ coembed <- RunPCA(coembed, features = genes.use, verbose = FALSE)
 coembed <- RunUMAP(coembed, dims = 1:50)
 DimPlot(coembed, group.by = 'orig.ident', reduction = 'umap')
 ```
+
+
