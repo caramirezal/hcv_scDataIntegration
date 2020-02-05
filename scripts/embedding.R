@@ -23,3 +23,5 @@ coembed <- NormalizeData(coembed)
 coembed <- ScaleData(coembed, features = genes.use, do.scale = FALSE)
 coembed <- RunPCA(coembed, features = genes.use, verbose = FALSE)
 coembed <- RunUMAP(coembed, dims = 1:50)
+
+saveRDS(coembed, '../data/coembed_satpathy_miller.rds')
