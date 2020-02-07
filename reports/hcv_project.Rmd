@@ -15,6 +15,7 @@ library(ggplot2)
 library(GEOquery)
 library(Seurat)
 source('../scripts//pipeline.R')
+library(gridExtra)
 
 knitr::opts_chunk$set(warning = FALSE,
                       message = FALSE,
@@ -160,9 +161,9 @@ if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
 ```
 
 ```{r seurat_object}
-dir.create('../data/miller2019_upper_Case')
-file.copy('../data/miller2019/matrix.mtx', '../data/miller2019_upper_Case/')
-file.copy('../data/miller2019/barcodes.tsv', '../data/miller2019_upper_Case/')
+#dir.create('../data/miller2019_upper_Case')
+#file.copy('../data/miller2019/matrix.mtx', '../data/miller2019_upper_Case/')
+#file.copy('../data/miller2019/barcodes.tsv', '../data/miller2019_upper_Case/')
 genes_lc <- read.table('../data/miller2019/genes.tsv', header = FALSE)
 genes_lc$V2 <- toupper(genes_lc$V2)
 write_tsv(genes_lc, '../data/miller2019_upper_Case/genes.tsv', col_names = FALSE)
@@ -210,3 +211,50 @@ integrated <- RunUMAP(integrated,
 DimPlot(integrated, group.by = 'orig.ident', reduction = 'pca', 
         label = FALSE)
 ```
+
+```{r liger}
+liger <- read_rds('../data/liger_miller_satpathy_tsne.rds')
+head(liger$metadata)
+```
+
+```{r}
+## cells annotation
+liger.df <- as.data.frame(liger$tsne) %>% mutate(signatures=liger$clusters, barcodes=rownames(liger$tsne))
+liger.df <- rename(liger.df, tSNE1=V1, tSNE2=V2)
+g1 <- ggplot(liger.df, aes(tSNE1, tSNE2, colour=signatures)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+g1
+```
+
+
+```{r fig.width=10, fig.height=7}
+datasets <- liger$metadata %>% mutate(barcodes=rownames(liger$metadata))
+liger.df.add <- merge(liger.df, datasets) 
+g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+grid.arrange(g1, g2, ncol=2)
+```
+
+
+```{r}
+## annotation of satpathy data
+barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
+                       header = TRUE)  
+barcodes.s <- barcodes$Barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+satpathy.ann <- data.frame(barcodes=barcodes.s, cell_type=cluster_cell_types)
+satpathy.ann <- mutate(satpathy.ann, barcodes=paste0(barcodes, '.atac'))
+head(satpathy.ann)
+
+## miller annotations
+```
+
+
