@@ -1,0 +1,103 @@
+---
+title: "Alignement of Satpathy and Miller data using Liger"
+author: "Health Data Science Unit"
+date: "`r date()`"
+output: 
+    html_document:
+            code_folding: hide
+---
+
+## Alignment clustered by dataset and signature exposure
+
+```{r include=FALSE}
+library(tidyverse)
+library(gridExtra)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE, cache.lazy = FALSE)
+```
+
+```{r liger}
+liger <- read_rds('../data/liger_miller_satpathy_tsne.rds')
+```
+
+```{r}
+## cells annotation
+liger.df <- as.data.frame(liger$tsne) %>% mutate(signatures=liger$clusters, barcodes=rownames(liger$tsne))
+liger.df <- rename(liger.df, tSNE1=V1, tSNE2=V2)
+g1 <- ggplot(liger.df, aes(tSNE1, tSNE2, colour=signatures)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+```
+
+
+```{r fig.width=10, fig.height=5}
+datasets <- liger$metadata %>% mutate(barcodes=rownames(liger$metadata))
+liger.df.add <- merge(liger.df, datasets) 
+g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+grid.arrange(g2, g1, ncol=2)
+```
+
+```{r}
+## annotation of satpathy data
+barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
+                       header = TRUE)  
+barcodes.s <- barcodes$Barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+satpathy.ann <- data.frame(barcodes=barcodes.s, cell_type=cluster_cell_types)
+satpathy.ann <- mutate(satpathy.ann, barcodes=paste0(barcodes, '.atac'))
+
+## miller annotations
+miller.ann <- read_rds('../data/rna_annotations_miller2019.rds')
+miller.ann <- mutate(miller.ann, barcodes=rownames(miller.ann))
+
+## combined annotations
+ann.df <- rbind(miller.ann[, c(3,2)], 
+                satpathy.ann[, c(1,2)])
+annotations <- merge(liger.df.add, ann.df)
+
+annotations <- mutate(annotations, 
+                      miller_cell_type=sapply(1:nrow(annotations), 
+                                              function(i) ifelse(annotations$dataset[i]=='rna',
+                                                                 as.character(annotations$cell_type[i]), 'atac')) )
+annotations <- mutate(annotations, 
+                      satpathy_cell_type=sapply(1:nrow(annotations), 
+                                              function(i) ifelse(annotations$dataset[i]=='atac',
+                                                                 as.character(annotations$cell_type[i]), 'rna')) )
+```
+
+```{r fig.width=10, fig.height=20}
+p1 <- ggplot(subset(annotations, dataset == 'rna'), 
+             aes(tSNE1, tSNE2, colour=miller_cell_type)) + 
+             geom_point(alpha=0.3, size=1.5) + 
+              theme_bw() +
+             theme(legend.position = 'none')
+#p2 <- ggplot(subset(annotations, satpathy_cell_type %in%  texSathpathy), 
+#             aes(tSNE1, tSNE2, colour=satpathy_cell_type)) + 
+#        geom_point(alpha=0.3, size=1.5) + 
+#        theme_bw()
+```
+
+```{r}
+miller_ann_sub <- subset(annotations, dataset != 'atac')
+miller_dist <- table(miller_ann_sub$signatures, 
+                     miller_ann_sub$miller_cell_type)
+miller_dist.df <- as.data.frame(miller_dist)
+miller_dist_plot <- ggplot(miller_dist.df, aes(x = Var1, y = Freq, fill=Var2)) + 
+        geom_bar(stat = 'identity') + 
+        coord_flip() + 
+        theme_classic() + 
+        ylab('Frequency') +
+        xlab('Liger cluster') +
+        theme(text=element_text(face = 'bold', size = 12),
+              legend.title = element_blank()) + 
+        ggtitle('RNA')
+grid.arrange(p1, miller_dist_plot, ncol=2)
+```
