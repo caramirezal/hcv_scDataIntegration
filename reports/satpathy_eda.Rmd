@@ -13,6 +13,8 @@ output:
 ```{r setup, include=FALSE}
 library(dplyr)
 library(ggplot2)
+library(R.utils)
+library(Matrix)
 
 knitr::opts_chunk$set(cache = TRUE, warning = FALSE, message = FALSE)
 ```
@@ -23,23 +25,26 @@ barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE129785&format
 matrix_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE129785&format=file&file=GSE129785%5FscATAC%2DTME%2DTCells%2Emtx%2Egz'
 peaks_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE129785&format=file&file=GSE129785%5FscATAC%2DTME%2DTCells%2Epeaks%2Etxt%2Egz'
 
+if ( ! dir.exists('../data/satpathy2019/')) {
+        dir.create('../data/satpathy2019/')
+}
 ## dowloading data
-if ( ! file.exists('../data/satpathy2016/barcodes.tsv')) {
-      download.file(barcodes_url, destfile = '../data/hcv/satpathy2016/barcodes.tsv.gz')
-      gunzip('../data/hcv/satpathy2016/barcodes.tsv.gz', 
-             destname = '../data/hcv/satpathy2016/barcodes.tsv',
+if ( ! file.exists('../data/satpathy2019/barcodes.tsv')) {
+      download.file(barcodes_url, destfile = '../data/satpathy2019/barcodes.tsv.gz')
+      gunzip('../data/satpathy2019/barcodes.tsv.gz', 
+             destname = '../data/satpathy2019/barcodes.tsv',
              remove = FALSE)  
 }
-if ( ! file.exists('../data/satpathy2016/matrix.mtx')){
-        download.file(matrix_url, destfile = '../data/satpathy2016/matrix.mtx.gz')
-        gunzip('../data/hcv/satpathy2016/matrix.mtx.gz', 
-               destname = '../data/hcv/satpathy2016/matrix.mtx', 
+if ( ! file.exists('../data/satpathy2019/matrix.mtx')){
+        download.file(matrix_url, destfile = '../data/satpathy2019/matrix.mtx.gz')
+        gunzip('../data/satpathy2019/matrix.mtx.gz', 
+               destname = '../data/satpathy2019/matrix.mtx', 
                remove = FALSE)  
 }
-if ( ! file.exists('../data/satpathy2016/genes.tsv')){
-        download.file(peaks_url, destfile = '../data/satpathy2016/genes.tsv.gz')
-        gunzip('../data/hcv/satpathy2016/genes.tsv.gz', 
-               destname = '../data/hcv/satpathy2016/genes.tsv',
+if ( ! file.exists('../data/satpathy2019/genes.tsv')){
+        download.file(peaks_url, destfile = '../data/satpathy2019/genes.tsv.gz')
+        gunzip('../data/satpathy2019/genes.tsv.gz', 
+               destname = '../data/satpathy2019/genes.tsv',
                remove = FALSE) 
 }
 ```
@@ -47,24 +52,40 @@ if ( ! file.exists('../data/satpathy2016/genes.tsv')){
 
 ```{r loading_data}
 ## barcodes
-barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
+barcodes <- read.table('../data/satpathy2019/barcodes.tsv', 
                        header = TRUE)  
 barcodes.s <- barcodes$Barcodes
 
-## peaks
-peaks <- read.table('../data/satpathy2016/genes.tsv', header = TRUE)
+## peaks        
+peaks <- read.table('../data/satpathy2019/genes.tsv', header = TRUE)
 peaks <- as.character(peaks$Feature)
 
 ## counts
-counts <- readMM('../data/satpathy2016/matrix.mtx')
+counts <- readMM('../data/satpathy2019/matrix.mtx')
 rownames(counts) <- as.character(peaks)
 colnames(counts) <- barcodes.s
 ```
 
-```{r run_cistopic}
-cisTopicObject <- createcisTopicObject(counts[1:100,1:100], project.name='AdBrCortex_accessibility')
-cisTopicObject <- addCellMetadata(cisTopicObject, cell.data = barcodes)
+
+```{r satpathy_loading}
+## barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
 ```
+
+
+```{r create_annotations}
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+```
+
 
 
 
