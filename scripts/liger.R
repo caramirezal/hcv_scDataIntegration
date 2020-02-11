@@ -33,14 +33,14 @@ run_liger <- function(rna_path,
         saveRDS(liger, liger_path)
         
         cat('Run TSNE\n')
-        ligerex = runTSNE(ligerex)
+        liger = runTSNE(liger)
         
         cat('Plotting visualizations\n')
         pdf(plot_path)
-        plotByDatasetAndCluster(ligerex) #Can also pass in different set of cluster labels to plot
-        plotFeature(ligerex, "nUMI")
-        plotWordClouds(ligerex)
-        plotGeneLoadings(ligerex)
+        plotByDatasetAndCluster(liger) #Can also pass in different set of cluster labels to plot
+        plotFeature(liger, "nUMI")
+        plotWordClouds(liger)
+        plotGeneLoadings(liger)
         dev.off()
 }
 
@@ -48,8 +48,8 @@ run_liger <- function(rna_path,
 
 
 run_liger(
-        rna_path = '../data/rna.rds',
-        gam_path = '../data/gene_activity_matrix_cd8tcells.rds',
+        rna_path = '../data/rna_counts_miller.rds',
+        gam_path = '../data/gene_activity_matrix_satpathy_cd8.rds',
         k = 10,
         liger_path = '../data/liger_cd8tcells.rds',
         plot_path = '../figures/liger_cd8tcells.pdf',  
