@@ -2,9 +2,7 @@
 title: "Satpathy AT et al, 2016 EDA"
 author: "Health Data Science Unit"
 date: "1/28/2020"
-output: 
-    html_document:
-        code_folding: hide
+output: html_document
 ---
 
 ## Sorted CD8 T cells from BCC
@@ -13,11 +11,16 @@ output:
 ```{r setup, include=FALSE}
 library(dplyr)
 library(ggplot2)
+library(Matrix)
+library(Seurat)
+source('../scripts/pipeline.R')
 
-knitr::opts_chunk$set(cache = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE, cache.lazy = TRUE)
 ```
 
-```{r}
+## Downloading data
+
+```{r downloading_data}
 ## Downloading Satpathy AT et al, 2019 data
 barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE129785&format=file&file=GSE129785%5FscATAC%2DTME%2DTCells%2Ecell%5Fbarcodes%2Etxt%2Egz'
 matrix_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE129785&format=file&file=GSE129785%5FscATAC%2DTME%2DTCells%2Emtx%2Egz'
@@ -42,14 +45,20 @@ if ( ! file.exists('../data/satpathy2016/genes.tsv')){
                destname = '../data/hcv/satpathy2016/genes.tsv',
                remove = FALSE) 
 }
+if ( ! file.exists('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')){
+        summarized_url <- 'https://changseq.s3.amazonaws.com/Jeff/10x_ScATAC/scATAC_TME_TCells_SummarizedExperiment.final.rds' 
+        download.file(summarized_url, destfile = '../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+}
 ```
 
+## Loading data
 
 ```{r loading_data}
 ## barcodes
 barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
                        header = TRUE)  
 barcodes.s <- barcodes$Barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
 
 ## peaks
 peaks <- read.table('../data/satpathy2016/genes.tsv', header = TRUE)
@@ -61,9 +70,129 @@ rownames(counts) <- as.character(peaks)
 colnames(counts) <- barcodes.s
 ```
 
-```{r run_cistopic}
-cisTopicObject <- createcisTopicObject(counts[1:100,1:100], project.name='AdBrCortex_accessibility')
-cisTopicObject <- addCellMetadata(cisTopicObject, cell.data = barcodes)
+# Quality control
+
+## Plotting sequencing depth versus Fragments of Reads In Peaks
+
+There are only `r length(unique(barcodes.s))` unique of `r length(barcodes.s)` barcodes. To evaluate wheter there is an
+artifact during sequencing the depth and Fragments of Reads In peaks are plotted showing the points with 
+duplicated barcodes.
+
+
+```{r duplicated}
+dup <- duplicated(barcodes.s)
+barcodes %>% ggplot(aes(x = depth, y = FRIP, colour = dup)) + 
+        geom_point() + theme_classic()
+```
+
+## Getting rid of duplicated barcodes
+
+```{r drop_dup}
+barcodes <- barcodes[!dup, ]
+counts <- counts[, !dup]
+
+activity_matrix <- readRDS('../data/satpathy2016/activity_matrix.RDS')
+activity_matrix <- activity_matrix[, !dup]
+```
+
+## Cluster annotation
+
+```{r create_annotations}
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+```
+
+
+## Seurat visualization
+
+```{r}
+atac <- CreateSeuratObject(
+        counts = activity_matrix,
+        assay = 'ATAC',
+        project = 'atac'
+)
+## Adding estimated gene activity matrix
+atac[['activity']] <- CreateAssayObject(
+        counts = activity_matrix
+)
+DefaultAssay(atac) <- 'activity'
+atac$orig.ident <- cluster_cell_types[!dup]
+atac$'tech' <- 'ATAC'
+atac <- NormalizeData(atac)
+atac <- ScaleData(atac)
+DefaultAssay(atac) <- "ATAC"
+VariableFeatures(atac) <- names(which(Matrix::rowSums(atac) > 100))
+atac <- RunLSI(atac, n = 50, scale.max = NULL)
+atac <- RunUMAP(atac, reduction = "lsi", dims = 1:50)
+```
+
+
+```{r}
+DefaultAssay(atac) <- 'activity'
+atac.vis <- DimPlot(atac, group.by = 'orig.ident', reduction = 'umap', label = TRUE) + ggtitle('ATAC') + NoLegend()
+atac.vis
+```
+
+## Constant expression of PD1 while using Seurat Naive Gene Activity Matrix
+
+```{r}
+FeaturePlot(atac, features = toupper(c('pdcd1')))
+```
+
+
+
+## Subsetting CD8 T Cells only
+
+```{r subsetting_cd8}
+cd8tcells <- c('12-Effector CD8 T',
+               '13-Naive CD8 T', 
+               '14-Memory CD8 T', 
+               '15-Early TEx', 
+               '16-Intermediate TEx',
+               '17-Terminal TEx')
+satpathy.ann <- mutate(barcodes, cell_type=cluster_cell_types[!dup])
+satpathy.ann <- filter(satpathy.ann, cell_type %in% cd8tcells)
+cd8_barcodes <- sapply(colnames(counts), function(x) x %in% satpathy.ann$Barcodes)
+counts <- counts[, cd8_barcodes]
+activity_matrix <- activity_matrix[, cd8_barcodes]
+saveRDS(activity_matrix, '../data/gene_activity_matrix_satpathy_cd8.rds')
+```
+
+##
+
+```{r}
+atac <- CreateSeuratObject(
+        counts = activity_matrix,
+        assay = 'ATAC',
+        project = 'atac'
+)
+## Adding estimated gene activity matrix
+atac[['activity']] <- CreateAssayObject(
+        counts = activity_matrix
+)
+DefaultAssay(atac) <- 'activity'
+atac$orig.ident <- satpathy.ann$cell_type
+atac$'tech' <- 'ATAC'
+atac <- NormalizeData(atac)
+atac <- ScaleData(atac)
+DefaultAssay(atac) <- "ATAC"
+VariableFeatures(atac) <- names(which(Matrix::rowSums(atac) > 100))
+atac <- RunLSI(atac, n = 50, scale.max = NULL)
+atac <- RunUMAP(atac, reduction = "lsi", dims = 1:50)
+```
+
+```{r}
+DefaultAssay(atac) <- 'activity'
+atac.vis <- DimPlot(atac, group.by = 'orig.ident', reduction = 'umap', label = TRUE) + ggtitle('ATAC') + NoLegend()
+atac.vis
 ```
 
 
