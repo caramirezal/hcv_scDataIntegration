@@ -1,0 +1,41 @@
+---
+title: "Himmer data EDA"
+author: "Health Data Science Unit"
+date: "2/12/2020"
+output: html_document
+---
+
+
+```{r include=FALSE}
+library(Seurat)
+library(tidyverse)
+source('../scripts/pipeline.R')
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE, 
+                      cache = TRUE)
+```
+
+```{r loading_data}
+tex <- read.csv('../data/nina_thimme_raw_counts.csv', 
+                header = TRUE)
+r_names <- tex$X
+tex <- select(tex, -X)
+tex_mtx <- apply(tex, 2, as.numeric)
+rownames(tex_mtx) <- r_names
+
+tex_seu <- CreateSeuratObject(counts = tex_mtx, project = 'Tex', min.cells = 1, assay = 'rna')
+tex_seu <- st_workflow(tex_seu, n_features = 1000, n_pca_dims = 100)
+```
+
+
+```{r}
+DimPlot(tex_seu, group.by = 'orig.ident', reduction = 'umap') 
+```
+
+```{r}
+FeaturePlot(tex_seu, features = c('PDCD1--chr2', 'EOMES--chr3',      ## Tex
+                                  'HAVCR2--chr5', 'ENTPD1--chr10',
+                                  'TCF7--chr5', 'ID3--chr1'), ## Terminally
+            reduction = 'umap') 
+```
