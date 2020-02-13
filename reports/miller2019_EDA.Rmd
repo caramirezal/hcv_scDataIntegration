@@ -43,3 +43,8 @@ rna_lcmv <- Read10X('../data/miller2019/')
 rna_seu <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 1)
 ```
 
+
+```{r eval=FALSE}
+write_rds(rna_lcmv, '../data/rna_counts_miller.rds')
+```
+

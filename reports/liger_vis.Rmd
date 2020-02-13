@@ -12,6 +12,7 @@ output:
 ```{r include=FALSE}
 library(tidyverse)
 library(gridExtra)
+library(forecast)
 
 knitr::opts_chunk$set(warning = FALSE, message = FALSE, cache = TRUE, cache.lazy = FALSE)
 ```
@@ -24,14 +25,25 @@ liger <- read_rds('../data/liger_miller_satpathy_tsne.rds')
 ## cells annotation
 liger.df <- as.data.frame(liger$tsne) %>% mutate(signatures=liger$clusters, barcodes=rownames(liger$tsne))
 liger.df <- rename(liger.df, tSNE1=V1, tSNE2=V2)
-g1 <- ggplot(liger.df, aes(tSNE1, tSNE2, colour=signatures)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+g1 <- ggplot(liger.df, aes(tSNE1, tSNE2, colour=signatures)) + geom_point(alpha=0.5, size=0.5) +
+        theme(panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank(),
+        legend.position = 'none')
 ```
 
 
 ```{r fig.width=10, fig.height=5}
 datasets <- liger$metadata %>% mutate(barcodes=rownames(liger$metadata))
 liger.df.add <- merge(liger.df, datasets) 
-g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha=0.5, size=0.5) + theme_bw()
+g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha=0.5, size=0.5) +
+        theme(panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
 grid.arrange(g2, g1, ncol=2)
 ```
 
@@ -71,6 +83,13 @@ annotations <- mutate(annotations,
                       satpathy_cell_type=sapply(1:nrow(annotations), 
                                               function(i) ifelse(annotations$dataset[i]=='atac',
                                                                  as.character(annotations$cell_type[i]), 'rna')) )
+
+cd8tcells <- c('12-Effector CD8 T',
+               '13-Naive CD8 T', 
+               '14-Memory CD8 T', 
+               '15-Early TEx', 
+               '16-Intermediate TEx',
+               '17-Terminal TEx')
 ```
 
 ```{r fig.width=10, fig.height=20}
@@ -79,25 +98,105 @@ p1 <- ggplot(subset(annotations, dataset == 'rna'),
              geom_point(alpha=0.3, size=1.5) + 
               theme_bw() +
              theme(legend.position = 'none')
-#p2 <- ggplot(subset(annotations, satpathy_cell_type %in%  texSathpathy), 
-#             aes(tSNE1, tSNE2, colour=satpathy_cell_type)) + 
-#        geom_point(alpha=0.3, size=1.5) + 
-#        theme_bw()
+p2 <- ggplot(subset(annotations, dataset == 'atac' & cell_type %in% cd8tcells), 
+             aes(tSNE1, tSNE2, colour=satpathy_cell_type)) + 
+        geom_point(alpha=0.3, size=1.5) + 
+        theme_bw() +
+             theme(legend.position = 'none')
 ```
 
-```{r}
-miller_ann_sub <- subset(annotations, dataset != 'atac')
+```{r rna_distribution}
+miller_ann_sub <- subset(annotations, dataset == 'rna')
 miller_dist <- table(miller_ann_sub$signatures, 
                      miller_ann_sub$miller_cell_type)
 miller_dist.df <- as.data.frame(miller_dist)
-miller_dist_plot <- ggplot(miller_dist.df, aes(x = Var1, y = Freq, fill=Var2)) + 
+cats <- factor(miller_dist.df$Var1, levels = 0:19)
+
+miller_dist_plot <- miller_dist.df %>% 
+        mutate(Var1 = cats) %>%
+        ggplot(aes(x = Var1, y = Freq, fill=Var2)) + 
         geom_bar(stat = 'identity') + 
         coord_flip() + 
         theme_classic() + 
-        ylab('Frequency') +
-        xlab('Liger cluster') +
+        xlab('Frequency') +
         theme(text=element_text(face = 'bold', size = 12),
-              legend.title = element_blank()) + 
-        ggtitle('RNA')
+              legend.title = element_blank(), axis.title.y = element_blank()) + 
+        ggtitle('RNA') 
 grid.arrange(p1, miller_dist_plot, ncol=2)
+```
+
+```{r atac_distribution}
+
+satpathy_ann_sub <- subset(annotations, dataset == 'atac' & cell_type %in% cd8tcells)
+
+satpathy_dist <- table(satpathy_ann_sub$signatures, 
+                     satpathy_ann_sub$satpathy_cell_type)
+satpathy_dist.df <- as.data.frame(satpathy_dist)
+cats <- factor(satpathy_dist.df$Var1, levels = 0:19)
+
+
+satpathy_dist_plot <- satpathy_dist.df %>% 
+        mutate(Var1 = cats) %>%
+        ggplot(aes(x = Var1, y = Freq, fill=Var2)) + 
+        geom_bar(stat = 'identity') + 
+        coord_flip() + 
+        theme_classic() + 
+        xlab('Frequency') +
+        theme(text=element_text(face = 'bold', size = 12),
+              legend.title = element_blank(), axis.title.y = element_blank()) + 
+        ggtitle('ATAC') 
+grid.arrange(p2, satpathy_dist_plot, ncol=2)
+```
+
+
+## Subsetting
+
+```{r subsetting_vis}
+## visualization of subsetting
+liger_cd8 <- read_rds('../data/liger_cd8tcells_tsne.rds')
+liger_cd8_df <- liger_cd8$tsne %>% as.data.frame() %>%
+                     rename(tSNE1=V1, tSNE2=V2) %>%
+                     mutate(dataset=sapply(rownames(liger_cd8$tsne), 
+                                           function(x) ifelse(grepl('.atac', x),
+                                                              'atac', 'rna')),
+                            barcodes=rownames(liger_cd8$tsne) 
+                            ) 
+liger_cd8_ann <- merge(
+        liger_cd8_df,
+        select(annotations, barcodes, cell_type, nUMI, nGene)
+)
+
+subset(liger_cd8_ann, cell_type %in% cd8tcells) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) + geom_point(alpha=0.4) + theme_bw()
+```
+
+```{r}
+subset(liger_cd8_ann, dataset == 'rna') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) + geom_point(alpha=0.4) + theme_bw()
+```
+
+```{r}
+liger_cd8_ann %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha=0.3) + theme_bw()
+```
+
+```{r}
+subset(liger_cd8_ann, cell_type %in% c('12-Effector CD8 T', 'Effector')) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) + geom_point(alpha=0.4) + theme_bw()
+```
+
+```{r}
+subset(liger_cd8_ann, cell_type %in% c('17-Terminal TEx', 'Terminally Ex')) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) + geom_point(alpha=0.4) + theme_bw()
+```
+
+
+```{r}
+subset(liger_cd8_ann, cell_type %in% c('Progenitor Ex', '15-Early TEx', '16-Intermediate TEx')  ) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) + geom_point(alpha=0.4) + theme_bw()
+```
+
+```{r}
+TEx <- readRDS('../data/TEx_batch_correction_tsne.rds')
+TEs_df <- TEx$tsne %>% mutate(patient_id=)
 ```

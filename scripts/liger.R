@@ -47,15 +47,17 @@ run_liger <- function(rna_path,
 
 
 
-run_liger(
-        rna_path = '../data/rna.rds',
-        gam_path = '../data/gene_activity_matrix_cd8tcells.rds',
-        k = 10,
-        liger_path = '../data/liger_cd8tcells.rds',
-        plot_path = '../figures/liger_cd8tcells.pdf',  
-        interspecies = TRUE
-)
+#run_liger(
+#        rna_path = '../data/rna.rds',
+#        gam_path = '../data/gene_activity_matrix_cd8tcells.rds',
+#        k = 10,
+#        liger_path = '../data/liger_cd8tcells.rds',
+#        plot_path = '../figures/liger_cd8tcells.pdf',  
+#        interspecies = TRUE
+#)
 
+
+liger_in <- readRDS('../data/TEx_liger')
 
 
 
