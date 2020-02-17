@@ -234,7 +234,7 @@ g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha
 grid.arrange(g1, g2, ncol=2)
 ```
 
-```{r}
+```{r eval=FALSE}
 miller_ann_sub <- subset(annotations, dataset != 'atac')
 miller_dist <- table(miller_ann_sub$signatures, 
                      miller_ann_sub$miller_cell_type)

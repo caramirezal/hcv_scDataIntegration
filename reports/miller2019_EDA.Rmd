@@ -5,7 +5,7 @@ date: "`r date()`"
 output: html_document
 ---
 
-```{r}
+```{r include=FALSE}
 library(Seurat)
 library(tidyverse)
 
@@ -14,7 +14,7 @@ knitr::opts_chunk$set(message = TRUE,
                       warning = TRUE)
 ```
 
-```{r}
+```{r download_miller}
 barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fbarcodes%2Etsv%2Egz'
 genes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fgenes%2Etsv%2Egz'
 counts_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fmatrix%2Emtx%2Egz' 
@@ -38,13 +38,23 @@ if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
 }
 ```
 
-```{r}
+```{r loading_miller}
 rna_lcmv <- Read10X('../data/miller2019/')
 rna_seu <- CreateSeuratObject(counts = rna_lcmv, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 1)
 ```
 
 
-```{r eval=FALSE}
+```{r saving_miller, eval=FALSE}
 write_rds(rna_lcmv, '../data/rna_counts_miller.rds')
+```
+
+```{r standard_preprocessing}
+rna <- NormalizeData(rna)
+rna <- FindVariableFeatures(rna, selection.method = 'vst', nfeatures = 3000)
+rna <- ScaleData(rna, verbose = FALSE)
+rna <- RunPCA(rna, npcs = 30, verbose = FALSE)
+rna <- RunUMAP(rna, reduction = "pca", dims = 1:30)
+rna <- FindNeighbors(rna, dims = 1:30, verbose = FALSE)
+rna <- FindClusters(rna, resolution= 0.1, verbose = FALSE)
 ```
 

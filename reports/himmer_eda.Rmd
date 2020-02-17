@@ -69,7 +69,8 @@ TEx <- readRDS('../data/TEx_batch_correction_tsne.rds')
 TEx$tsne %>% as.data.frame() %>% mutate(patient_id=patients) %>%
              rename(tSNE1=V1, tSNE2=V2) %>%
              ggplot(aes(tSNE1, tSNE2, colour=patient_id)) + geom_point() + theme_classic()
-TEx_umap <- uwot::umap(TEx$H_norm)
-TEx_umap %>% as.data.frame() %>% ggplot(aes(V1, V2, colour=patients)) + geom_point() 
+```
+
+```{r}
 ```
 
