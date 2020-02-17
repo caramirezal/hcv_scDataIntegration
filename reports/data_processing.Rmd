@@ -1,0 +1,151 @@
+---
+title: "Data processing"
+author: "Health Data Science Unit"
+date: "`r date()`"
+output: html_document
+---
+
+
+```{r include=FALSE}
+library(Seurat)
+library(tidyverse)
+source('../scripts/pipeline.R')
+#library(harmony)
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE, 
+                      cache = TRUE,
+                      fig.width = 7,
+                      fig.height = 7, 
+                      fig.align = TRUE)
+```
+
+## Himmer data
+
+
+## Loading data
+
+```{r loading_data}
+himmer <- read.csv('../data/nina_thimme_raw_counts.csv', 
+                header = TRUE)
+r_names <- himmer$X
+himmer <- select(himmer, -X)
+himmer_mtx <- apply(himmer, 2, as.numeric)
+rownames(himmer_mtx) <- gsub('__chr.*', '', r_names) 
+
+himmer_seu <- CreateSeuratObject(counts = himmer_mtx, project = 'himmer', min.cells = 1, assay = 'rna')
+himmer_seu <- st_workflow(himmer_seu, n_features = 1000, n_pca_dims = 100)
+```
+
+
+## Data vis
+
+```{r}
+DimPlot(himmer_seu, group.by = 'orig.ident', reduction = 'umap') 
+```
+
+## Batch correction
+
+### Splitting subsets by patient
+
+```{r }
+patients <- himmer_seu$orig.ident
+himmer_df <- as.data.frame(t(himmer_mtx))
+himmer_sp <- split(himmer_df, f = patients) 
+himmer_sp <- lapply(himmer_sp, function(x) t(x) )
+#saveRDS(himmer_sp, '../data/himmer_splitted.rds')
+```
+
+
+## Loading Miller data
+
+```{r}
+barcodes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fbarcodes%2Etsv%2Egz'
+genes_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fgenes%2Etsv%2Egz'
+counts_url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE122712&format=file&file=GSE122712%5Fmatrix%2Emtx%2Egz' 
+if (! file.exists('../data/miller2019/barcodes.tsv')){
+        download.file(barcodes_url, destfile = '../data/miller2019/GSE122712_barcodes.tsv.gz')
+        gunzip('../data/miller2019/GSE122712_barcodes.tsv.gz',
+               destname = '../data/miller2019/barcodes.tsv', 
+               remove = FALSE)
+}
+if (! file.exists('../data/miller2019/genes.tsv')) {
+        download.file(genes_url, destfile = '../data/miller2019/GSE122712_genes.tsv.gz')
+        gunzip('../data/miller2019/GSE122712_genes.tsv.gz', 
+               destname = '../data/miller2019/genes.tsv', 
+               remove = FALSE)
+}
+if (! file.exists('../data/miller2019/matrix.mtx.gz')) {
+        download.file(counts_url, destfile = '../data/miller2019/matrix.mtx.gz')
+        gunzip('../data/miller2019/matrix.mtx.gz', 
+               destname = '../data/miller2019/matrix.mtx', 
+               remove = FALSE)
+}
+```
+
+## Standardizing gene names
+
+* Gene names should be in upper case in order to align with human data.
+
+```{r seurat_object, eval=FALSE}
+## Run once in order to create ../data/miller2019_upper_Case/
+
+#dir.create('../data/miller2019_upper_Case')
+#file.copy('../data/miller2019/matrix.mtx', '../data/miller2019_upper_Case/')
+#file.copy('../data/miller2019/barcodes.tsv', '../data/miller2019_upper_Case/')
+genes_lc <- read.table('../data/miller2019/genes.tsv', header = FALSE)
+genes_lc$V2 <- toupper(genes_lc$V2)
+write_tsv(genes_lc, '../data/miller2019_upper_Case/genes.tsv', col_names = FALSE)
+```
+
+```{r}
+miller_mtx <- Read10X('../data/miller2019_upper_Case/')
+miller <- CreateSeuratObject(counts = miller_mtx, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
+```
+
+## Clustering Miller data
+
+### Seurat standard preprocessing
+
+```{r miller_seurat_std_preprocessing}
+miller <- NormalizeData(miller)
+miller <- FindVariableFeatures(miller, selection.method = 'vst', nfeatures = 3000)
+miller <- ScaleData(miller, verbose = FALSE)
+miller <- RunPCA(miller, npcs = 30, verbose = FALSE)
+miller <- RunUMAP(miller, reduction = "pca", dims = 1:30)
+miller <- FindNeighbors(miller, dims = 1:30, verbose = FALSE)
+miller <- FindClusters(miller, resolution= 0.1, verbose = FALSE)
+```
+
+### Cluster annotation
+
+```{r annotate_clusters}
+miller$orig.ident <- miller$seurat_clusters
+miller_ann <- data.frame('cluster' = miller$orig.ident,
+                      'cell_type' = plyr::mapvalues(x = miller$orig.ident,
+                                                    from = as.factor(c(3,0,4,2,1)), 
+                                                    to = c('Proliferating', 'Effector', 'Naive',
+                                                           'Progenitor Ex', 'Terminally Ex')
+                                                    )
+)
+miller <- AddMetaData(miller, metadata = miller_ann)
+saveRDS(miller_ann, '../data/miller_annotations.rds')
+miller.vis <- DimPlot(miller, group.by = 'cell_type', reduction = 'umap', label = TRUE) + NoLegend() + ggtitle('RNA')
+miller.vis
+```
+
+
+
+## Merging Miller and Himmer datasets
+
+* In addition to using upper case in the Miller data, gene names must be processed in Himmer databases to remove '_chromosome#' tag.
+
+```{r merging_Himmer_Miller}
+## checking no empty intersection of genes
+#length( intersect( rownames(himmer_sp$DW), rownames(miller_mtx)))
+
+## merging miller and himmer in a list
+merged_himmer_miller <- c('Miller_dataset'=miller_mtx, himmer_sp)
+saveRDS(merged_himmer_miller, '../data/merged_himmer_miller.rds')
+```
+
