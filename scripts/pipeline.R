@@ -108,51 +108,6 @@ miller$'cell_type' <- miller_ann$cell_type
 merged_seu <- TEx_sp_seu
 merged_seu$'miller' <- miller
 
-###########################################################################################
-## Reciprocal PCA
-for (i in 1:length(merged_seu)) {
-        merged_seu[[i]] <- NormalizeData(merged_seu[[i]], verbose = FALSE)
-        merged_seu[[i]] <- FindVariableFeatures(merged_seu[[i]], selection.method = "vst", 
-                                                nfeatures = 2000, verbose = FALSE)
-        merged_seu[[i]] <- ScaleData(merged_seu[[i]], verbose = FALSE)
-        merged_seu[[i]] <- RunPCA(merged_seu[[i]], npcs = 30, verbose = FALSE)
-}
-
-
-############################################################################################
-
-## Standard preprocessing
-for (i in 1:length(merged_seu)) {
-        merged_seu[[i]] <- NormalizeData(merged_seu[[i]], verbose = FALSE)
-        merged_seu[[i]] <- FindVariableFeatures(merged_seu[[i]], selection.method = "vst", 
-                                                   nfeatures = 2000, verbose = FALSE)
-}
-
-
-reference.list <- merged_seu[names(TEx_sp)]
-anchors <- FindIntegrationAnchors(object.list = reference.list, 
-                                           dims = 1:30, 
-                                           k.filter = 30)
-integrated <- IntegrateData(anchorset = anchors, dims = 1:30, k.weight = 30)
-DefaultAssay(integrated) <- "integrated"
-integrated <- ScaleData(integrated, verbose = FALSE)
-integrated <- RunPCA(integrated, npcs = 30, verbose = FALSE)
-integrated <- RunUMAP(integrated, reduction = 'pca', dims = 1:30)
-
-## **Plotting integrated data** 
-DimPlot(integrated, reduction = 'umap', group.by = 'orig.ident')
-
-query <- merged_seu[["miller"]]
-query <- ScaleData(query, verbose = FALSE)
-query <- RunPCA(query, npcs = 30, verbose = FALSE)
-query <- RunUMAP(query, reduction = "pca", dims = 1:30)
-anchors <- FindTransferAnchors(reference = query, query = integrated, 
-                                        dims = 1:10, reduction = 'pca')
-predictions <- TransferData(anchorset = anchors, refdata = query$orig.ident, 
-                            dims = 1:15, weight.reduction = 'pca', k.weight = 20)
-query <- AddMetaData(query, metadata = predictions)
-
-
 ########################################################################################################
 ## Integration based in reference
 
