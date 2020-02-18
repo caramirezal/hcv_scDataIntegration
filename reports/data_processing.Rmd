@@ -35,6 +35,7 @@ rownames(himmer_mtx) <- gsub('__chr.*', '', r_names)
 
 himmer_seu <- CreateSeuratObject(counts = himmer_mtx, project = 'himmer', min.cells = 1, assay = 'rna')
 himmer_seu <- st_workflow(himmer_seu, n_features = 1000, n_pca_dims = 100)
+saveRDS(himmer_seu, '../data/himmer_seu.rds')
 ```
 
 
@@ -44,16 +45,16 @@ himmer_seu <- st_workflow(himmer_seu, n_features = 1000, n_pca_dims = 100)
 DimPlot(himmer_seu, group.by = 'orig.ident', reduction = 'umap') 
 ```
 
-## Batch correction
+## Batch correction data preprocessing
 
 ### Splitting subsets by patient
 
-```{r }
+```{r}
 patients <- himmer_seu$orig.ident
 himmer_df <- as.data.frame(t(himmer_mtx))
 himmer_sp <- split(himmer_df, f = patients) 
 himmer_sp <- lapply(himmer_sp, function(x) t(x) )
-#saveRDS(himmer_sp, '../data/himmer_splitted.rds')
+saveRDS(himmer_sp, '../data/himmer_splitted.rds')
 ```
 
 
@@ -100,10 +101,10 @@ write_tsv(genes_lc, '../data/miller2019_upper_Case/genes.tsv', col_names = FALSE
 
 ```{r}
 miller_mtx <- Read10X('../data/miller2019_upper_Case/')
-miller <- CreateSeuratObject(counts = miller_mtx, project = 'lcmv', assay = 'rna', min.cells = 1, min.features = 200)
+miller <- CreateSeuratObject(counts = miller_mtx, project = 'lcmv', assay = 'RNA', min.cells = 1, min.features = 200)
 ```
 
-## Clustering Miller data
+## Visualization of Miller data
 
 ### Seurat standard preprocessing
 
@@ -115,6 +116,7 @@ miller <- RunPCA(miller, npcs = 30, verbose = FALSE)
 miller <- RunUMAP(miller, reduction = "pca", dims = 1:30)
 miller <- FindNeighbors(miller, dims = 1:30, verbose = FALSE)
 miller <- FindClusters(miller, resolution= 0.1, verbose = FALSE)
+saveRDS(miller, '../data/miller_seu.rds')
 ```
 
 ### Cluster annotation
@@ -149,3 +151,50 @@ merged_himmer_miller <- c('Miller_dataset'=miller_mtx, himmer_sp)
 saveRDS(merged_himmer_miller, '../data/merged_himmer_miller.rds')
 ```
 
+## Processing Satpathy data
+
+```{r loading_satpathy}
+## barcodes
+barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
+                       header = TRUE)  
+barcodes.s <- barcodes$Barcodes
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+
+## peaks
+peaks <- read.table('../data/satpathy2016/genes.tsv', header = TRUE)
+peaks <- as.character(peaks$Feature)
+
+## counts
+counts <- readMM('../data/satpathy2016/matrix.mtx')
+rownames(counts) <- as.character(peaks)
+colnames(counts) <- barcodes.s
+```
+
+
+```{r subsetting_data}
+## looking for duplicated barcodes
+dup <- duplicated(barcodes.s)
+
+## cluster annotation
+t_cell_clust <- summaryTCells$T_Cell_Cluster
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+cd8tcells <- c('12-Effector CD8 T',
+               '13-Naive CD8 T', 
+               '14-Memory CD8 T', 
+               '15-Early TEx', 
+               '16-Intermediate TEx',
+               '17-Terminal TEx')
+is_cd8 <- sapply(cluster_cell_types, function(x) x %in% cd8tcells)
+
+## Dropping non CD8 T Cells and duplicated barcodes
+keep <- ( ! dup ) & is_cd8
+counts <- counts[, keep]
+```
