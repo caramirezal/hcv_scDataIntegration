@@ -2,6 +2,7 @@
 ## Must be run in the curry cluster
 library(liger)
 library(Seurat)
+library(Matrix)
 
 ## standard liger run
 run_liger <- function(liger,
@@ -109,7 +110,53 @@ merged_seu <- TEx_sp_seu
 merged_seu$'miller' <- miller
 
 ########################################################################################################
-## Integration based in reference
+## Batch correction using Seurat
+for (i in 1:length(merged_seu)) {
+        merged_seu[[i]] <- NormalizeData(merged_seu[[i]], verbose = FALSE)
+        merged_seu[[i]] <- FindVariableFeatures(merged_seu[[i]], selection.method = "vst", 
+                                                nfeatures = 2000, verbose = FALSE)
+}
+
+
+reference.list <- merged_seu[names(TEx_sp)]
+anchors <- FindIntegrationAnchors(object.list = reference.list, 
+                                  dims = 1:30, 
+                                  k.filter = 30)
+integrated <- IntegrateData(anchorset = anchors, dims = 1:30, k.weight = 30)
+DefaultAssay(integrated) <- "integrated"
+integrated <- ScaleData(integrated, verbose = FALSE)
+integrated <- RunPCA(integrated, npcs = 30, verbose = FALSE)
+integrated <- RunUMAP(integrated, reduction = 'pca', dims = 1:30)
+
+## **Plotting integrated data** 
+DimPlot(integrated, reduction = 'umap', group.by = 'orig.ident')
+
+
+########################################################################################################
+## Label transfer using reference based transfer of information
+cat('Loading TEx splitted dataset\n')
+TEx_sp <- readRDS('../data/himmer_splitted.rds')
+
+## Creating seurat objects for every sample
+TEx_sp_seu <- lapply(1:length(TEx_sp), 
+                     function(i) CreateSeuratObject(counts = TEx_sp[i][[1]], 
+                                                    project = 'hcv', 
+                                                    assay = 'RNA', 
+                                                    min.cells = 1, 
+                                                    min.features = 1) 
+)
+names(TEx_sp_seu) <- names(TEx_sp)
+
+## Loading Miller data
+miller <- readRDS('../data/miller_seu.rds')
+
+## Loading Miller annotations
+miller_ann <- readRDS('../data/miller_annotations.rds')
+miller$'cell_type' <- miller_ann$cell_type
+
+## merging datasets
+merged_seu <- TEx_sp_seu
+merged_seu$'miller' <- miller
 
 for (i in 1:length(merged_seu)) {
         merged_seu[[i]] <- NormalizeData(merged_seu[[i]], verbose = FALSE)
@@ -126,7 +173,7 @@ merged_seu <- PrepSCTIntegration(object.list = merged_seu, anchor.features = fea
 reference_dataset <- which(names(merged_seu) == "miller")
 anchors <- FindIntegrationAnchors(object.list = merged_seu, normalization.method = "SCT", 
                                        anchor.features = features, reference = reference_dataset)
-integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", k.weight = 20)
+integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", k.weight = 50)
 
 integrated <- RunPCA(object = integrated, verbose = FALSE)
 integrated <- RunUMAP(object = integrated, dims = 1:30)
@@ -138,4 +185,20 @@ DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap')
 DimPlot(integrated, group.by = 'cell_type', reduction = 'umap')
 
 predictions <- TransferData(anchorset = anchors, refdata = query$cell_type, 
-                            dims = 1:15, weight.reduction = 'pca', k.weight = 20)
+                            dims = 1:15, weight.reduction = 'umap', k.weight = 50)
+
+preds <- integrated$cell_type
+preds[1:length(predictions$predicted.id)] <- predictions$predicted.id
+integrated$preds <- preds
+integrated$'dataset' <- sapply(integrated$orig.ident, function(x) 
+                               ifelse(x=='lcmv', 'Miller', 'Pat Samp'))
+sizes <- rep(1, length(integrated$orig.ident))
+sizes[1:length(predictions$predicted.id)] <- 3
+DimPlot(integrated, 
+        group.by = 'preds', 
+        reduction = 'umap', split.by = 'dataset')
+
+
+######################################################################################################################
+## Definition of the activity matrix from the Satpathy ATAC data
+
