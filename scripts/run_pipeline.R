@@ -50,6 +50,11 @@ save_liger <- function(ligerex,
         saveRDS(liger_res, dir_path)
 }
 
+######################################################################################
+##     										    ##
+##           Integration of Himmer and Miller data                                  ##
+##								                    ##
+######################################################################################
 
 #cat('Processing liger object\n')
 #merged_himmer_miller <- readRDS('../data/merged_himmer_miller.rds')
@@ -64,9 +69,14 @@ save_liger <- function(ligerex,
 #        interspecies = TRUE
 #)
 
-liger <- readRDS('../data/liger_himmer_miller.rds')
+#liger <- readRDS('../data/liger_himmer_miller.rds')
 ## Saving liger results
-save_liger(
-        ligerex = liger,
-        dir_path = '../data/liger_himmer_miller_tsne.rds'
-)
+#save_liger(
+#        ligerex = liger,
+#        dir_path = '../data/liger_himmer_miller_tsne.rds'
+#)
+
+#######################################################################
+satpathy <- readRDS('data/satpathy_cdtcells_only_counts.rds')
+dim(satpathy)
+class(satpathy)
