@@ -8,9 +8,8 @@ output: html_document
 
 ```{r include=FALSE}
 library(Seurat)
+library(Signac)
 library(tidyverse)
-source('../scripts/pipeline.R')
-#library(harmony)
 
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE, 
@@ -197,4 +196,6 @@ is_cd8 <- sapply(cluster_cell_types, function(x) x %in% cd8tcells)
 ## Dropping non CD8 T Cells and duplicated barcodes
 keep <- ( ! dup ) & is_cd8
 counts <- counts[, keep]
+saveRDS(counts, '../data/satpathy_cdtcells_only_counts.rds')
 ```
+
