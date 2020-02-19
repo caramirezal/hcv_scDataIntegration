@@ -58,7 +58,7 @@ save_liger <- function(ligerex,
 ##                       T CD8 Exhausted cells TEx datasets                                ##
 ##                                                                                         ##
 #############################################################################################
-
+## This section must be run in cluster
 cat('Processing liger object\n')
 merged_himmer_miller <- readRDS('../data/merged_himmer_miller.rds')
 liger <- createLiger(merged_himmer_miller)
@@ -177,6 +177,8 @@ integrated <- IntegrateData(anchorset = anchors, normalization.method = "SCT", k
 
 integrated <- RunPCA(object = integrated, verbose = FALSE)
 integrated <- RunUMAP(object = integrated, dims = 1:30)
+integrated <- FindNeighbors(integrated, dims = 1:15, verbose = FALSE)
+integrated <- FindClusters(integrated, resolution = 0.1, verbose = FALSE, weights = 100, node.sizes = 10)
 
 integrated$cell_type <- sapply(integrated$cell_type,
                                function(x) ifelse(is.na(x), 'TEx samp', x) )
@@ -184,21 +186,43 @@ integrated$cell_type <- sapply(integrated$cell_type,
 DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap')
 DimPlot(integrated, group.by = 'cell_type', reduction = 'umap')
 
-predictions <- TransferData(anchorset = anchors, refdata = query$cell_type, 
-                            dims = 1:15, weight.reduction = 'umap', k.weight = 50)
+## to be corrected
+#predictions <- TransferData(anchorset = anchors, refdata = as.character(miller$cell_type), 
+#                            dims = 1:15, weight.reduction = 'umap', k.weight = 50)
 
-preds <- integrated$cell_type
+cell_type <- integrated$cell_type
 preds[1:length(predictions$predicted.id)] <- predictions$predicted.id
-integrated$preds <- preds
+
+#integrated$preds <- preds
 integrated$'dataset' <- sapply(integrated$orig.ident, function(x) 
                                ifelse(x=='lcmv', 'Miller', 'Pat Samp'))
-sizes <- rep(1, length(integrated$orig.ident))
-sizes[1:length(predictions$predicted.id)] <- 3
+#sizes <- rep(1, length(integrated$orig.ident))
+#sizes[1:length(predictions$predicted.id)] <- 3
+
+##**Cell type and seurat cluster coincides**
 DimPlot(integrated, 
-        group.by = 'preds', 
-        reduction = 'umap', split.by = 'dataset')
+        group.by = 'cell_type', 
+        reduction = 'umap', split.by = 'dataset', pt.size = 1.3) + ggtitle('By cell type')
+DimPlot(integrated, 
+        group.by = 'seurat_clusters', 
+        reduction = 'umap', split.by = 'dataset', pt.size = 1.3) + ggtitle('By Seurat cluster')
 
 
 ######################################################################################################################
-## Definition of the activity matrix from the Satpathy ATAC data
+##                                                                                                                  ##
+##                   Integration fo Miller and Satpathy gene scores activity matrix                                 ##
+##                                                                                                                  ##
+######################################################################################################################
+satpathy <- read_rds('../data/score_activity_matrix_cd8tcells.rds')
+satpathy_seu <- CreateSeuratObject(counts = satpathy, 
+                                   project = 'hcv', 
+                                   assay = 'gene_scores', 
+                                   min.cells = 50, 
+                                   min.features = 200)
+
+
+
+
+
+
 
