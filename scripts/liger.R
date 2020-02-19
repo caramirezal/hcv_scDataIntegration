@@ -54,6 +54,14 @@ run_liger <- function(rna_path,
 #liger_path = '../liger_cd8tcells.rds'
 #plot_path = '../liger_cd8tcells.pdf'  
 #interspecies = TRUE
+#run_liger(
+#        rna_path = '../data/rna.rds',
+#        gam_path = '../data/gene_activity_matrix_cd8tcells.rds',
+#        k = 10,
+#        liger_path = '../data/liger_cd8tcells.rds',
+#        plot_path = '../figures/liger_cd8tcells.pdf',  
+#        interspecies = TRUE
+#)
 
 #cat('reading rna counts')
 #rna <- readRDS(rna_path)
@@ -101,6 +109,8 @@ liger_save <- function(liger,
        cat('Saving results \n')
        saveRDS(res, path_dest)
 }
+liger_in <- readRDS('../data/TEx_liger')
+
 
 
 #saveRDS(res, '../data/liger_cd8tcells_tsne.rds')

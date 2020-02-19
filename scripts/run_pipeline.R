@@ -1,6 +1,11 @@
 ## Run pipeline 
 ## Must be run in the curry cluster
-library(liger)
+#library(liger)
+library(Signac)
+library(Seurat)
+library(GenomeInfoDb)
+library(EnsDb.Hsapiens.v75)
+set.seed(1234)
 
 ## gene expression + atac integration
 run_liger <- function(liger,
@@ -80,3 +85,4 @@ save_liger <- function(ligerex,
 satpathy <- readRDS('data/satpathy_cdtcells_only_counts.rds')
 dim(satpathy)
 class(satpathy)
+

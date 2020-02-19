@@ -1,0 +1,52 @@
+---
+title: "Results visualisation"
+author: "Health Data Science Unit"
+date: "2/17/2020"
+output: html_document
+---
+
+```{r include=FALSE}
+library(Seurat)
+library(tidyverse)
+
+knitr::opts_chunk$set(message = TRUE, 
+                      eval = TRUE, 
+                      warning = TRUE,
+                      fig.align = TRUE,
+                      fig.width = 8,
+                      fig.height = 8)
+```
+
+
+```{r}
+## loading annotations
+miller_ann <- readRDS('../data/miller_annotations.rds')
+## loading liger results
+liger_himmer_miller_tsne <- read_rds('../data/liger_himmer_miller_tsne.rds')
+
+dataset_name <- names(liger_himmer_miller_tsne$H)
+dataset_nb_samp <- sapply(liger_himmer_miller_tsne$H, function(x) nrow(x))
+dataset <- unlist(lapply(1:length(dataset_name), 
+                         function(x) rep(dataset_name[x], dataset_nb_samp[x])))
+
+
+liger_ann <- liger_himmer_miller_tsne$tsne_coords %>% 
+              as.data.frame %>%
+              mutate(cell_type = dataset)
+```
+
+```{r liger_by_dataset}
+liger_ann %>% 
+        rename(tSNE1=V1, tSNE2=V2) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour= cell_type)) +
+        geom_point(alpha = 0.8, size = 1.5) + theme_classic()
+```
+
+```{r liger_by_cell_type}
+liger_ann$cell_type[1:nrow(miller_ann)] <- as.character(miller_ann$cell_type)
+liger_ann %>% 
+        rename(tSNE1=V1, tSNE2=V2) %>% 
+        ggplot(aes(tSNE1, tSNE2, colour= cell_type)) +
+        geom_point(alpha = 0.8, size = 1.5) + theme_classic()
+```
+

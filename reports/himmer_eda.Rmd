@@ -1,0 +1,76 @@
+---
+title: "Himmer data EDA"
+author: "Health Data Science Unit"
+date: "2/12/2020"
+output: 
+   html_document
+---
+
+## Exploratory Data Analysis on Himmer data
+
+```{r include=FALSE}
+library(Seurat)
+library(tidyverse)
+source('../scripts/pipeline.R')
+library(harmony)
+
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE, 
+                      cache = TRUE,
+                      fig.width = 7,
+                      fig.height = 7, 
+                      fig.align = TRUE)
+```
+
+## Loading data
+
+```{r loading_data}
+tex <- read.csv('../data/nina_thimme_raw_counts.csv', 
+                header = TRUE)
+r_names <- tex$X
+tex <- select(tex, -X)
+tex_mtx <- apply(tex, 2, as.numeric)
+rownames(tex_mtx) <- r_names
+## extracting patient tags
+
+tex_seu <- CreateSeuratObject(counts = tex_mtx, project = 'Tex', min.cells = 1, assay = 'rna')
+tex_seu <- st_workflow(tex_seu, n_features = 1000, n_pca_dims = 100)
+```
+
+## Quality control
+
+```{r}
+plot(tex_seu$nCount_rna, tex_seu$nFeature_rna, col = tex_seu$orig.ident)
+```
+
+## Batch effect by patient
+
+```{r}
+DimPlot(tex_seu, group.by = 'orig.ident', reduction = 'umap') 
+```
+
+## Removing batch effects
+
+### Harmony
+
+```{r}
+patients <- tex_seu$orig.ident
+tex_df <- as.data.frame(t(tex_mtx))
+tex_sp <- split(tex_df, f = patients) 
+tex_sp <- lapply(tex_sp, function(x) t(x) )
+#saveRDS(tex_sp, '../data/TEx_splitted.rds')
+```
+
+
+# Liger
+
+```{r}
+TEx <- readRDS('../data/TEx_batch_correction_tsne.rds')
+TEx$tsne %>% as.data.frame() %>% mutate(patient_id=patients) %>%
+             rename(tSNE1=V1, tSNE2=V2) %>%
+             ggplot(aes(tSNE1, tSNE2, colour=patient_id)) + geom_point() + theme_classic()
+```
+
+```{r}
+```
+

@@ -9,7 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 library(Matrix)
-library(dplyr)
+library(tidyverse)
 library(uwot)
 library(ggplot2)
 library(GEOquery)
@@ -226,6 +226,7 @@ g1
 ```
 
 
+
 ```{r fig.width=10, fig.height=7}
 datasets <- liger$metadata %>% mutate(barcodes=rownames(liger$metadata))
 liger.df.add <- merge(liger.df, datasets) 
@@ -233,28 +234,24 @@ g2 <- ggplot(liger.df.add, aes(tSNE1, tSNE2, colour=dataset)) + geom_point(alpha
 grid.arrange(g1, g2, ncol=2)
 ```
 
+```{r eval=FALSE}
+miller_ann_sub <- subset(annotations, dataset != 'atac')
+miller_dist <- table(miller_ann_sub$signatures, 
+                     miller_ann_sub$miller_cell_type)
+miller_dist.df <- as.data.frame(miller_dist)
+miller_dist_plot <- ggplot(miller_dist.df, aes(x = Var1, y = Freq, fill=Var2)) + 
+        geom_bar(stat = 'identity') + 
+        coord_flip() + 
+        theme_classic() + 
+        ylab('Frequency') +
+        xlab('Liger cluster') +
+        theme(text=element_text(face = 'bold', size = 12),,
+              legend.title = element_blank()) + 
+        ggtitle('RNA')
 
-```{r}
-## annotation of satpathy data
-barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
-                       header = TRUE)  
-barcodes.s <- barcodes$Barcodes
-summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
-t_cell_clust <- summaryTCells$T_Cell_Cluster
-cluster_labs <- paste0('Cluster', 1:19)        
-cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
-               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
-               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
-               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
-               '17-Terminal TEx', '18-Other T', '19-Other T')
-cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
-                                      from = cluster_labs, 
-                                      to = cell_type)
-satpathy.ann <- data.frame(barcodes=barcodes.s, cell_type=cluster_cell_types)
-satpathy.ann <- mutate(satpathy.ann, barcodes=paste0(barcodes, '.atac'))
-head(satpathy.ann)
-
-## miller annotations
+grid.arrange(g1, miller_dist_plot)
 ```
+
+
 
 
