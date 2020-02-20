@@ -3,6 +3,7 @@
 library(liger)
 library(Seurat)
 library(Matrix)
+library(tidyverse)
 
 ## standard liger run
 run_liger <- function(liger,
@@ -195,7 +196,7 @@ preds[1:length(predictions$predicted.id)] <- predictions$predicted.id
 
 #integrated$preds <- preds
 integrated$'dataset' <- sapply(integrated$orig.ident, function(x) 
-                               ifelse(x=='lcmv', 'Miller', 'Pat Samp'))
+                               ifelse(x=='lcmv', 'Miller', 'Maike'))
 #sizes <- rep(1, length(integrated$orig.ident))
 #sizes[1:length(predictions$predicted.id)] <- 3
 
@@ -207,20 +208,31 @@ DimPlot(integrated,
         group.by = 'seurat_clusters', 
         reduction = 'umap', split.by = 'dataset', pt.size = 1.3) + ggtitle('By Seurat cluster')
 
+integrated$'predicted' <- plyr::mapvalues(as.character(integrated$seurat_clusters), 
+                                          from = c('0', '1', '2', '3'),
+                                          to = c('Effector', 'Terminally Ex',
+                                                 'Progenitor Ex', 'Proliferating'))
+
+saveRDS(integrated, '../data/integrated_miller_maike.rds')
+
+## Subsetting integrated data to Maike imputed dataset  
+integrated_sub <- subset(integrated, dataset != 'Miller')
+saveRDS(integrated_sub, '../data/integrated_miller_maike_sub.rds')
 
 ######################################################################################################################
 ##                                                                                                                  ##
 ##                   Integration fo Miller and Satpathy gene scores activity matrix                                 ##
 ##                                                                                                                  ##
 ######################################################################################################################
+## Reading Satpathy cd8 t cells only seurat processed data
 satpathy <- read_rds('../data/score_activity_matrix_cd8tcells.rds')
-satpathy_seu <- CreateSeuratObject(counts = satpathy, 
-                                   project = 'hcv', 
-                                   assay = 'gene_scores', 
-                                   min.cells = 50, 
-                                   min.features = 200)
 
+## Reading Miller imputed data
+miller <- read_rds('../data/integrated_miller_maike_sub.rds') 
 
+liger <- create
+
+merge <- readRDS('../data/merged_himmer_miller.rds')
 
 
 
