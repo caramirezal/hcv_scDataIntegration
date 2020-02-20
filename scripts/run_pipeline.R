@@ -1,10 +1,10 @@
 ## Run pipeline 
 ## Must be run in the curry cluster
-#library(liger)
-library(Signac)
+library(liger)
+#library(Signac)
 library(Seurat)
-library(GenomeInfoDb)
-library(EnsDb.Hsapiens.v75)
+#library(GenomeInfoDb)
+#library(EnsDb.Hsapiens.v75)
 set.seed(1234)
 
 ## gene expression + atac integration
@@ -82,7 +82,33 @@ save_liger <- function(ligerex,
 #)
 
 #######################################################################
-satpathy <- readRDS('data/satpathy_cdtcells_only_counts.rds')
-dim(satpathy)
-class(satpathy)
+## Integration of Mike to Satpathy
+
+merge <- readRDS('data/merged_himmer_miller.rds')
+merge <- merge[names(merge)!='Miller_dataset']
+satpathy <- readRDS('data/score_activity_matrix_cd8tcells.rds')
+merge$'satpathy' <- satpathy
+sapply(merge, class)
+names(merge)
+sapply(merge, function(x) head(colnames(x)))
+sapply(merge, function(x) head(rownames(x)))
+
+liger <- createLiger(merge)
+
+
+cat('Running liger\n')
+run_liger(
+        liger = liger,
+        k = 20,
+        liger_path = 'data/liger_maike_satpathy.rds',
+        plot_path = 'figures/liger_maike_satpathy.pdf',  
+        interspecies = TRUE
+)
+
+#liger <- readRDS('../data/liger_himmer_miller.rds')
+## Saving liger results
+save_liger(
+        ligerex = liger,
+        dir_path = '../data/liger_maike_satpathy_tsne.rds'
+)
 
