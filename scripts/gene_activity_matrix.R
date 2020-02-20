@@ -23,7 +23,7 @@ remove(counts)
 counts_seu <- NormalizeData(counts_seu)
 counts_seu <- FindVariableFeatures(counts_seu, 
                                      selection.method = 'vst',
-                                     nfeatures = 100000)
+                                     nfeatures = 50000)
 var_features <- VariableFeatures(counts_seu)
 counts_fs <- counts_seu@assays$RNA@counts[var_features, ]
 
