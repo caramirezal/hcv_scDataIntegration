@@ -2,7 +2,7 @@
 ## Must be run in the curry cluster
 library(liger)
 #library(Signac)
-library(Seurat)
+#library(Seurat)
 #library(GenomeInfoDb)
 #library(EnsDb.Hsapiens.v75)
 set.seed(1234)
@@ -12,14 +12,15 @@ run_liger <- function(liger,
                       k=10,
                       liger_path,
                       plot_path,
-                      interspecies=NULL){
+                      interspecies=NULL,
+                      lambda=5){
         cat('liger normalization and scaling\n')
         liger <- normalize(liger)
         liger <- selectGenes(liger, combine = 'union', capitalize=interspecies)
         liger <- scaleNotCenter(liger)
         
         cat('Running liger\n')
-        liger <- optimizeALS(liger, k = k) 
+        liger <- optimizeALS(liger, k = k, lambda = lambda) 
         liger <- quantileAlignSNF(liger) 
         
         cat('Run TSNE\n')
@@ -29,8 +30,8 @@ run_liger <- function(liger,
         pdf(plot_path)
         plotByDatasetAndCluster(liger) #Can also pass in different set of cluster labels to plot
         plotFeature(liger, "nUMI")
-        plotWordClouds(liger)
-        plotGeneLoadings(liger)
+        #plotWordClouds(liger)
+        #plotGeneLoadings(liger)
         dev.off()
 
         cat('Saving results\n')
@@ -82,16 +83,18 @@ save_liger <- function(ligerex,
 #)
 
 #######################################################################
-## Integration of Mike to Satpathy
+## Integration of Maike to Satpathy
 
 merge <- readRDS('data/merged_himmer_miller.rds')
 merge <- merge[names(merge)!='Miller_dataset']
-satpathy <- readRDS('data/score_activity_matrix_cd8tcells.rds')
+satpathy <- readRDS('data/score_activity_matrix_TEx.rds')
+cat('Satpathy dim\n')
+dim(satpathy)
 merge$'satpathy' <- satpathy
 sapply(merge, class)
 names(merge)
-sapply(merge, function(x) head(colnames(x)))
-sapply(merge, function(x) head(rownames(x)))
+#sapply(merge, function(x) head(colnames(x)))
+#sapply(merge, function(x) head(rownames(x)))
 
 liger <- createLiger(merge)
 
@@ -99,16 +102,27 @@ liger <- createLiger(merge)
 cat('Running liger\n')
 run_liger(
         liger = liger,
-        k = 20,
-        liger_path = 'data/liger_maike_satpathy.rds',
-        plot_path = 'figures/liger_maike_satpathy.pdf',  
+        k = 5, lambda = 0.1,
+        liger_path = 'data/liger_maike_satpathy_lambda=0.1.rds',
+        plot_path = 'figures/liger_maike_satpathy_lambda=0.1.pdf',  
         interspecies = TRUE
 )
 
-#liger <- readRDS('../data/liger_himmer_miller.rds')
+
+liger <- readRDS('data/liger_maike_satpathy_lambda=0.1.rds')
 ## Saving liger results
 save_liger(
         ligerex = liger,
-        dir_path = '../data/liger_maike_satpathy_tsne.rds'
+        dir_path = 'data/liger_maike_satpathy_tsne_lambda=0.1.rds'
 )
 
+
+#calcAlignment(liger)
+#calcAgreement(liger)
+#calAlignment(liger)
+
+#cat('Suggest K\n')
+#pdf('figures/suggest_k.pdf')
+#suggestK(liger, k.test=seq(5,10,20), plot.log2=T)
+#dev.off()
+#suggestLambda(liger, k=5)
