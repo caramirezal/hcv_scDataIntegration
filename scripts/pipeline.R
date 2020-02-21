@@ -130,7 +130,7 @@ integrated <- RunPCA(integrated, npcs = 30, verbose = FALSE)
 integrated <- RunUMAP(integrated, reduction = 'pca', dims = 1:30)
 
 ## **Plotting integrated data** 
-DimPlot(integrated, reduction = 'umap', group.by = 'orig.ident')
+DimPlot(integrated, reduction = 'umap', group.by = 'orig.ident', pt.size = 1.5)
 
 
 ########################################################################################################
@@ -184,8 +184,8 @@ integrated <- FindClusters(integrated, resolution = 0.1, verbose = FALSE, weight
 integrated$cell_type <- sapply(integrated$cell_type,
                                function(x) ifelse(is.na(x), 'TEx samp', x) )
 
-DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap')
-DimPlot(integrated, group.by = 'cell_type', reduction = 'umap')
+DimPlot(integrated, group.by = 'orig.ident', reduction = 'umap', pt.size = 1.5)
+DimPlot(integrated, group.by = 'cell_type', reduction = 'umap', pt.size = 1.5)
 
 ## to be corrected
 #predictions <- TransferData(anchorset = anchors, refdata = as.character(miller$cell_type), 
@@ -208,10 +208,14 @@ DimPlot(integrated,
         group.by = 'seurat_clusters', 
         reduction = 'umap', split.by = 'dataset', pt.size = 1.3) + ggtitle('By Seurat cluster')
 
+
 integrated$'predicted' <- plyr::mapvalues(as.character(integrated$seurat_clusters), 
                                           from = c('0', '1', '2', '3'),
                                           to = c('Effector', 'Terminally Ex',
                                                  'Progenitor Ex', 'Proliferating'))
+DimPlot(integrated, 
+        group.by = 'predicted', 
+        reduction = 'umap', split.by = 'dataset', pt.size = 1.3, label = TRUE, label.size = 8) + NoLegend()
 
 saveRDS(integrated, '../data/integrated_miller_maike.rds')
 

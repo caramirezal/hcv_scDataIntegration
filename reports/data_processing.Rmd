@@ -155,9 +155,6 @@ saveRDS(merged_himmer_miller, '../data/merged_himmer_miller.rds')
 
 ```{r loading_satpathy}
 ## barcodes
-barcodes <- read.table('../data/satpathy2016/barcodes.tsv', 
-                       header = TRUE)  
-barcodes.s <- barcodes$Barcodes
 summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
 
 ## peaks
@@ -167,14 +164,11 @@ peaks <- as.character(peaks$Feature)
 ## counts
 counts <- readMM('../data/satpathy2016/matrix.mtx')
 rownames(counts) <- as.character(peaks)
-colnames(counts) <- barcodes.s
+colnames(counts) <- summaryTCells$Group_Barcode
 ```
 
 
 ```{r subsetting_data}
-## looking for duplicated barcodes
-dup <- duplicated(barcodes.s)
-
 ## cluster annotation
 t_cell_clust <- summaryTCells$T_Cell_Cluster
 cluster_labs <- paste0('Cluster', 1:19)        
@@ -186,34 +180,34 @@ cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
 cluster_cell_types <- plyr::mapvalues(t_cell_clust, 
                                       from = cluster_labs, 
                                       to = cell_type)
-cd8tcells <- c('12-Effector CD8 T',
-               '13-Naive CD8 T', 
-               '14-Memory CD8 T', 
-               '15-Early TEx', 
+TEx <- c('15-Early TEx', 
                '16-Intermediate TEx',
                '17-Terminal TEx')
-is_cd8 <- sapply(cluster_cell_types, function(x) x %in% cd8tcells)
+is_TEx <- sapply(cluster_cell_types, function(x) x %in% TEx)
+TEx_names <- summaryTCells$Group_Barcode[is_TEx]
 
 ## Dropping non CD8 T Cells and duplicated barcodes
-keep <- ( ! dup ) & is_cd8
-counts <- counts[, keep]
+counts <- counts[, is_TEx]
 saveRDS(counts, '../data/satpathy_cdtcells_only_counts.rds')
 ```
 
 ```{r subsetting_scores}
-#cicero <- readRDS('~/Downloads/Log2_Gene_Activity_TME_All_SummarizedExperiment.final.rds')
-#scores <- cicero@assays$data$logGA[, keep]
-#saveRDS(scores, '../data/score_activity_matrix_cd8tcells.rds')
-scores <- read_rds('../data/score_activity_matrix_cd8tcells.rds')
-#sam_ann <- data.frame(
-#        UMAP1 = cicero$UMAP1,
-#        UMAP2 = cicero$UMAP2,
-#        cluster = cicero$Clusters,
-#        group = cicero$Group,
-#        Barcodes = cicero$Barcodes,
-#        Group_Barcodes = cicero$Group_Barcode
-#)
-#saveRDS(sam_ann[keep, ], '../data/score_activity_matrix_annotations_cd8tcells.rds')
+cicero <- readRDS('~/Downloads/Log2_Gene_Activity_TME_All_SummarizedExperiment.final.rds')
+scores <- cicero@assays$data$logGA
+colnames(scores) <- cicero$Group_Barcode
+scores <- scores[, TEx_names]
+saveRDS(scores, '../data/score_activity_matrix_TEx.rds')
+scores <- read_rds('../data/score_activity_matrix_TEx.rds')
+sam_ann <- data.frame(
+        UMAP1 = cicero$UMAP1,
+        UMAP2 = cicero$UMAP2,
+        cluster = cicero$Clusters,
+        group = cicero$Group,
+        Barcodes = cicero$Barcodes,
+        Group_Barcodes = cicero$Group_Barcode
+)
+rownames(sam_ann) <- cicero$Group_Barcode
+saveRDS(sam_ann[TEx_names, ], '../data/score_activity_matrix_annotations_TEx.rds')
 
 
 ```
