@@ -66,26 +66,31 @@ dim(peaks)
 cat('dim gene activity\n')
 dim(gene_activity)
 
-cat('Dimensions check\n')
-( colnames(peaks) == colnames(gene_activity) ) %>% sum()
+#cat('Dimensions check\n')
+#( colnames(peaks) == colnames(gene_activity) ) %>% sum()
 
-cat('Creating seurat object\n')
-satpathy <- CreateSeuratObject(counts = peaks, assay = "ATAC", project = "Satpathy")
-satpathy[["ACTIVITY"]] <- CreateAssayObject(counts = gene_activity)
-satpathy <- subset(satpathy, subset = nCount_ATAC > 5000)
-satpathy$tech <- "atac"
+#cat('Creating seurat object\n')
+#satpathy <- CreateSeuratObject(counts = peaks, assay = "ATAC", project = "Satpathy")
+## This line is for getting annotations from SummaryTCell file object
+#satpathy$'cell_type' <- summaryTCells$T_Cell_Cluster
+#satpathy[["ACTIVITY"]] <- CreateAssayObject(counts = gene_activity)
+#satpathy <- subset(satpathy, subset = nCount_ATAC > 5000)
+#satpathy$tech <- "atac"
 
-cat('Normalization\n')
-DefaultAssay(satpathy) <- "ACTIVITY"
-satpathy <- FindVariableFeatures(satpathy)
-satpathy <- NormalizeData(satpathy)
-satpathy <- ScaleData(satpathy)
+#cat('Normalization\n')
+#DefaultAssay(satpathy) <- "ACTIVITY"
+#satpathy <- FindVariableFeatures(satpathy)
+#satpathy <- NormalizeData(satpathy)
+#satpathy <- ScaleData(satpathy)
 
-cat('Running LSI\n')
-DefaultAssay(satpathy) <- "ATAC"
-VariableFeatures(satpathy) <- names(which(Matrix::rowSums(satpathy) > 100))
-satpathy <- RunLSI(satpathy, n = 50, scale.max = NULL)
-satpathy <- RunUMAP(satpathy, reduction = "lsi", dims = 1:50)
+#cat('Running LSI\n')
+#DefaultAssay(satpathy) <- "ATAC"
+#VariableFeatures(satpathy) <- names(which(Matrix::rowSums(satpathy) > 100))
+#satpathy <- RunLSI(satpathy, n = 50, scale.max = NULL)
+#satpathy <- RunUMAP(satpathy, reduction = "lsi", dims = 1:50)
 
-cat('Saving data\n')
-saveRDS(satpathy, 'data/satpathy_processed_tcells_seurat.rds')
+#cat('Adding annotations\n')
+
+#cat('Saving data\n')
+#saveRDS(satpathy, 'data/satpathy_processed_tcells_seurat.rds')
+
