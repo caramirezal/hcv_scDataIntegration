@@ -4,6 +4,7 @@ library(liger)
 library(Seurat)
 library(Matrix)
 library(tidyverse)
+library(class)
 
 ## standard liger run
 run_liger <- function(liger,
@@ -223,20 +224,36 @@ saveRDS(integrated, '../data/integrated_miller_maike.rds')
 integrated_sub <- subset(integrated, dataset != 'Miller')
 saveRDS(integrated_sub, '../data/integrated_miller_maike_sub.rds')
 
+##################################################################################################################
+##                                                                                                              ##
+##                    Imputing cell types from Satpathy to Miller                                               ##
+##                                                                                                              ##
+##################################################################################################################
+## Here 2-D are used
+satpathy_tsne <- subset(tsne_ann, dataset == 'Satpathy')
+hofmann_tsne <- subset(tsne_ann, dataset == 'Hofmann')
+preds <- knn(train = as.matrix(select(satpathy_tsne, tSNE1,tSNE2)), 
+             test = as.matrix(select(hofmann_tsne, tSNE1,tSNE2)),
+             cl = satpathy_tsne$cell_type, k = 200)
+
 ######################################################################################################################
 ##                                                                                                                  ##
-##                   Integration fo Miller and Satpathy gene scores activity matrix                                 ##
+##                   Finding differentially expressed genes in Imputed clusters                                     ##
 ##                                                                                                                  ##
 ######################################################################################################################
-## Reading Satpathy cd8 t cells only seurat processed data
-satpathy <- read_rds('../data/score_activity_matrix_cd8tcells.rds')
+## Reading hofmann dataset
 
-## Reading Miller imputed data
-miller <- read_rds('../data/integrated_miller_maike_sub.rds') 
+hofmann_seu <- readRDS('../data/integrated_miller_maike_sub.rds') 
 
-liger <- create
+ord <- match(colnames(hofmann_seu), hofmann_tsne$Barcodes)
+hofmann_tsne_ord <- hofmann_tsne[ord,]
 
-merge <- readRDS('../data/merged_himmer_miller.rds')
+sum(colnames(hofmann_seu) == as.character(hofmann_tsne_ord$Barcodes ))
+hofmann_seu$'seurat_clusters' <- preds
+
+markers <- FindAllMarkers(hofmann_seu, min.pct = 0.25)
+
+head(markers, n=5)
 
 
 
