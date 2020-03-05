@@ -19,6 +19,7 @@ rownames(counts) <- as.character(peaks)
 colnames(counts) <- as.character(summaryTCells$Internal_Name)
 
 ## create seurat object
+<<<<<<< HEAD
 #counts_seu <- CreateSeuratObject(counts = counts, project = 'tcells', min.cells = 1, min.features = 1)
 #remove(counts)
 #counts_seu <- NormalizeData(counts_seu)
@@ -27,6 +28,16 @@ colnames(counts) <- as.character(summaryTCells$Internal_Name)
 #                                     nfeatures = 100000)
 #var_features <- VariableFeatures(counts_seu)
 #counts_fs <- counts_seu@assays$RNA@counts[var_features, ]
+=======
+counts_seu <- CreateSeuratObject(counts = counts, project = 'tcells', min.cells = 1, min.features = 1)
+remove(counts)
+counts_seu <- NormalizeData(counts_seu)
+counts_seu <- FindVariableFeatures(counts_seu, 
+                                     selection.method = 'vst',
+                                     nfeatures = 50000)
+var_features <- VariableFeatures(counts_seu)
+counts_fs <- counts_seu@assays$RNA@counts[var_features, ]
+>>>>>>> d9175bde08c5cba9a01edc47f7d6a83deb2e118b
 
 ## generate gene activity matrix
 #activity.matrix <- CreateGeneActivityMatrix(

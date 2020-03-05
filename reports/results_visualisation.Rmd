@@ -1,24 +1,31 @@
 ---
 title: "Results visualisation"
 author: "Health Data Science Unit"
-date: "2/17/2020"
-output: html_document
+date: "`r date()`"
+output: 
+   html_document:
+      code_fold: hide
 ---
 
 ```{r include=FALSE}
 library(Seurat)
 library(tidyverse)
+library(tidyverse)
+library(gridExtra)
+library(dplyr)
+library(reshape2)
 
-knitr::opts_chunk$set(message = TRUE, 
-                      eval = TRUE, 
-                      warning = TRUE,
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE,
                       fig.align = TRUE,
                       fig.width = 8,
                       fig.height = 8)
 ```
 
 
+
 ```{r}
+## Alignment of Miller & Maike datasets using liger
 ## loading annotations
 miller_ann <- readRDS('../data/miller_annotations.rds')
 ## loading liger results
@@ -35,18 +42,367 @@ liger_ann <- liger_himmer_miller_tsne$tsne_coords %>%
               mutate(cell_type = dataset)
 ```
 
-```{r liger_by_dataset}
+
+
+```{r liger_by_dataset, eval=FALSE}
+### Clustered by dataset
 liger_ann %>% 
         rename(tSNE1=V1, tSNE2=V2) %>% 
         ggplot(aes(tSNE1, tSNE2, colour= cell_type)) +
         geom_point(alpha = 0.8, size = 1.5) + theme_classic()
 ```
 
-```{r liger_by_cell_type}
+
+
+```{r liger_by_cell_type, eval=FALSE}
+### Clustered by cell type
 liger_ann$cell_type[1:nrow(miller_ann)] <- as.character(miller_ann$cell_type)
 liger_ann %>% 
         rename(tSNE1=V1, tSNE2=V2) %>% 
         ggplot(aes(tSNE1, tSNE2, colour= cell_type)) +
         geom_point(alpha = 0.8, size = 1.5) + theme_classic()
+```
+
+## Miller-Maike datasets Alignment using Seurat 
+
+
+```{r fig.width=10, fig.height=8}
+integrated <- readRDS('../data/integrated_miller_maike.rds')
+
+integrated$'dataset' <- sapply(integrated$orig.ident, function(x) 
+                               ifelse(x=='lcmv', 'Miller', 'Maike'))
+
+
+by_dataset <- DimPlot(integrated, 
+        group.by = 'dataset', 
+        reduction = 'umap', pt.size = 1.3) + ggtitle('By dataset')
+
+by_dataset
+```
+
+```{r fig.width=10, fig.height=8}
+integrated$'predicted' <- plyr::mapvalues(as.character(integrated$seurat_clusters), 
+                                          from = c('0', '1', '2', '3'),
+                                          to = c('Effector', 'Terminally Ex',
+                                                 'Progenitor Ex', 'Proliferating'))
+DimPlot(integrated, 
+        group.by = 'predicted', 
+        reduction = 'umap', split.by = 'dataset', pt.size = 1.3, label = TRUE, label.size = 8) + NoLegend()
+```
+
+```{r}
+hofmann_seu <- readRDS('../data/integrated_miller_maike_sub.rds') 
+## Plot check
+#DimPlot(hofmann_seu, group.by = 'predicted', label = TRUE) + NoLegend()
+#ord <- match(colnames(hofmann_seu), hofmann_tsne$Barcodes)
+#hofmann_tsne_ord <- hofmann_tsne[ord,]
+
+#sum(colnames(hofmann_seu) == as.character(hofmann_tsne_ord$Barcodes ))
+hofmann_seu$'seurat_clusters' <- hofmann_seu$predicted
+hofmann_seu$'miller_imputations' <- hofmann_seu$predicted
+
+markers <- FindAllMarkers(hofmann_seu, min.pct = 0.25)
+top1 <- markers %>% 
+        arrange(cluster, desc(avg_logFC)) %>% 
+        group_by(cluster) %>% 
+        top_n(n = 1, wt = avg_logFC) 
+```
+
+##  Differential expression analysis {.tabset}
+
+
+### UMAP
+
+```{r}
+FeaturePlot(hofmann_seu, features = c('ACTB', 'CCL4', 'RPS19', 'HMGB2'))
+```
+
+### Violin Plot
+
+```{r echo=FALSE}
+Idents(hofmann_seu) <- hofmann_seu$predicted
+VlnPlot(hofmann_seu, features = c('ACTB', 'CCL4', 'RPS19', 'HMGB2'),ncol = 2)
+```
+
+### Heatmap
+
+```{r heatmap_dif_exp, echo=FALSE}
+top10 <- markers %>% 
+        arrange(cluster, desc(avg_logFC)) %>% 
+        group_by(cluster) %>% 
+        top_n(n = 10, wt = avg_logFC) 
+DoHeatmap(hofmann_seu, features = top10$gene)
+```
+
+#
+
+* CCL4 is a chemokine expressed in a subpopulation of CD8+ T Cells during chronic exhaustion defined by SIRPalpha ([Myers L et al, 2019](https://www.nature.com/articles/s41467-019-08637-9#Abs1)).
+
+* HMGB2 knockdown inhibits proliferation in gastric cancer cells ([Li J et al, 2017](https://cancerci.biomedcentral.com/articles/10.1186/s12935-017-0408-8)).
+
+## Satpathy-Maike datasets alignment using liger
+
+```{r fig.height=8, fig.width=10}
+## read alignment of Maike & Satpathy
+masat_alig <- read_rds('../data/liger_maike_satpathy_tsne.rds')
+
+## Satpathy annotations
+summaryTCells <- readRDS('../data/satpathy2016/scATAC_TME_TCells_SummarizedExperiment.final.rds')
+satpathy_ann <- data.frame(
+        Barcodes = summaryTCells$Group_Barcode,
+        cell_type = summaryTCells$T_Cell_Cluster,
+        tech = 'ATAC',
+        dataset = 'Satpathy', 
+        stringsAsFactors = FALSE
+)
+```
+
+
+
+
+```{r}
+maike_seu <- readRDS('../data/integrated_miller_maike_sub.rds') 
+
+maike_ann <- data.frame(
+        Barcodes = colnames(maike_seu),
+        cell_type = maike_seu$predicted,
+        tech = 'RNA',
+        dataset = 'Hofmann',
+        stringsAsFactors = FALSE
+)
+write.table(maike_ann, '../Hofmann_annotated.tsv', sep = '\t', row.names = FALSE)
+
+## merging annotations
+ann <- rbind(satpathy_ann, maike_ann)
+
+## alignment annotation
+tsne_ann <- as.data.frame(masat_alig$tsne_coords) %>%
+               rename(tSNE1=V1, tSNE2=V2) %>%
+               mutate(Barcodes=rownames(masat_alig$tsne_coords)) %>%
+               select(Barcodes, tSNE1, tSNE2)
+tsne_ann <- merge(tsne_ann, ann)
+
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+tsne_ann$cell_type <- plyr::mapvalues(tsne_ann$cell_type, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+
+
+```
+
+
+## Alignment
+
+
+```{r fig.height=8, fig.width=10}
+## read alignment of Maike & Satpathy
+masat_alig <- read_rds('../data/liger_maike_satpathy_tsne_lambda=0.1.rds')
+
+## alignment annotation
+tsne_ann <- as.data.frame(masat_alig$tsne_coords) %>%
+               rename(tSNE1=V1, tSNE2=V2) %>%
+               mutate(Barcodes=rownames(masat_alig$tsne_coords)) %>%
+               select(Barcodes, tSNE1, tSNE2)
+tsne_ann <- merge(tsne_ann, ann)
+
+cluster_labs <- paste0('Cluster', 1:19)        
+cell_type <- c('1-Naive CD4 T', '2-Activated CD4', '3-Th1', '4-Memory CD4 T',
+               '5-Th17', '6-Th 1', '7-Th 2', '8-Treg 1',
+               '9-Treg 2', '10-Treg 3', '11-Treg 4', '12-Effector CD8 T',
+               '13-Naive CD8 T', '14-Memory CD8 T', '15-Early TEx', '16-Intermediate TEx',
+               '17-Terminal TEx', '18-Other T', '19-Other T')
+tsne_ann$cell_type <- plyr::mapvalues(tsne_ann$cell_type, 
+                                      from = cluster_labs, 
+                                      to = cell_type)
+
+by_dataset <- tsne_ann %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=dataset)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('By dataset')
+
+by_cell_type <- tsne_ann %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('By cell type')
+
+gridExtra::grid.arrange(by_dataset, by_cell_type, ncol=2)
+```
+
+## Maike imputed with Miller cell types
+
+```{r fig.height=8, fig.width=10}
+satpathy <- subset(tsne_ann, dataset == 'Satpathy') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Satpathy')
+
+hofmann <- subset(tsne_ann, dataset == 'Hofmann') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Mike')
+
+gridExtra::grid.arrange(satpathy, hofmann, ncol=2)
+```
+
+## Maike data imputation using Satpathy alignment
+
+```{r fig.height=8, fig.width=10}
+library(class)
+
+satpathy <- subset(tsne_ann, dataset == 'Satpathy') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Satpathy')
+
+satpathy_tsne <- subset(tsne_ann, dataset == 'Satpathy')
+hofmann_tsne <- subset(tsne_ann, dataset == 'Hofmann')
+preds <- knn(train = as.matrix(select(satpathy_tsne, tSNE1,tSNE2)), 
+    test = as.matrix(select(hofmann_tsne, tSNE1,tSNE2)),
+    cl = satpathy_tsne$cell_type, k = 200)
+hofmann <- subset(tsne_ann, dataset == 'Hofmann') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=preds)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Mike')
+
+
+gridExtra::grid.arrange(satpathy, hofmann, ncol=2)
+```
+
+
+
+```{r}
+### Saving Hoffman cells annotation based in satpathy alignment and clustering
+## Hoffman cells annotation based in satpathy alignment and clustering
+satpathy_tsne <- select(tsne_ann, -tSNE1, -tSNE2) %>%
+                 subset(dataset == 'Satpathy')
+hofmann_tsne <- data.frame('Barcodes' = hofmann_tsne$Barcodes,
+                           'cell_type' = hofmann_tsne$cell_type, 
+                           'tech' =  'RNA',
+                           'dataset' = 'Hofmann')
+merged <- rbind(hofmann_tsne, satpathy_tsne)
+
+saveRDS(hofmann_tsne, '../data/hofmann_imputed_cell_types.rds')
+```
+
+
+```{r}
+hofmann_tsne <- subset(tsne_ann, dataset == 'Hofmann') %>%
+                  mutate(satpathy_clusters= preds)
+ord <- match(colnames(hofmann_seu), as.character(hofmann_tsne$Barcodes)) 
+hofmann_ord <- hofmann_tsne[ord, ]
+Idents(hofmann_seu) <- hofmann_ord$satpathy_clusters
+hofmann_seu$'satpathy_imputations' <- hofmann_ord$satpathy_clusters
+## plot check
+#hofmann_ord %>% ggplot() + geom_point(aes(tSNE1, tSNE2, colour=satpathy_clusters))
+
+markers <- FindAllMarkers(hofmann_seu, min.pct = 0, logfc.threshold = 0.1)
+top1 <- markers %>% 
+        arrange(cluster, desc(avg_logFC)) %>% 
+        group_by(cluster) %>% 
+        top_n(n = 1, wt = avg_logFC) 
+```
+
+##  Differential expression analysis {.tabset}
+
+```{r echo=FALSE, eval=FALSE}
+hofmann <- subset(tsne_ann, dataset == 'Hofmann') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=preds)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Hofmann')
+
+```
+
+### UMAP
+
+
+```{r echo=FALSE}
+gene <- 'CCL4'
+gene_counts <- hofmann_seu@assays$SCT@scale.data[gene,]
+ccl4 <- hofmann_ord %>% 
+        mutate(marker=gene_counts) %>%
+        ggplot(aes(tSNE1, tSNE2, colour=marker)) + 
+        geom_point(alpha=0.8) + 
+        ggtitle('CCL4') +
+        theme_classic() 
+gene <- 'JUNB'
+gene_counts <- hofmann_seu@assays$SCT@scale.data[gene,]
+junb <- hofmann_ord %>% 
+        mutate(marker=gene_counts) %>%
+        ggplot(aes(tSNE1, tSNE2, colour=marker)) + 
+        geom_point(alpha=0.8) + 
+        theme_classic() +
+        ggtitle('JUNB')
+gene <- 'TMEM243'
+gene_counts <- hofmann_seu@assays$SCT@scale.data[gene,]
+tmem243 <- hofmann_ord %>% 
+        mutate(marker=gene_counts) %>%
+        ggplot(aes(tSNE1, tSNE2, colour=marker)) + 
+        geom_point(alpha=0.8) + 
+        theme_classic() +
+        ggtitle('TMEM243')
+
+grid.arrange(ccl4, junb, tmem243, ncol = 2)
+```
+
+
+
+### Violin Plot
+
+```{r echo=FALSE}
+VlnPlot(hofmann_seu, features = top1$gene, ncol = 3)
+```
+
+### Heatmap
+
+```{r heatmap_dif_exp_satpathy, echo=FALSE}
+top10 <- markers %>% 
+        arrange(cluster, desc(avg_logFC)) %>% 
+        group_by(cluster) %>% 
+        top_n(n = 1, wt = avg_logFC) 
+DoHeatmap(hofmann_seu, features = c('CCL4', 'JUNB', 'TMEM243'))
+```
+
+### Seurat cluster
+
+```{r echo=FALSE}
+FeaturePlot(hofmann_seu, features = c('CCL4', 'JUNB', 'TMEM243'))
+```
+
+#
+
+```{r fig.width=10, fig.height=7}
+cluster_comp <- table(hofmann_seu$miller_imputations, hofmann_seu$satpathy_imputations) %>%
+                      as.data.frame() %>%
+                      melt
+
+comp_plot <- cluster_comp %>% 
+        ggplot(aes(x=Var2, y = value, fill=Var1)) +
+        geom_bar(stat = 'identity') + 
+        theme_classic() +
+        xlab('') + ylab('Frequency') +
+        theme(legend.title = element_blank(),
+              axis.title.y = element_text(size = 14, face = 'bold'),
+              axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+hofmann <- subset(tsne_ann, dataset == 'Hofmann') %>% 
+        ggplot(aes(tSNE1, tSNE2, colour=cell_type)) +
+        geom_point(alpha=0.5, size=2) + 
+        theme_classic() + 
+        theme(legend.title = element_blank(), legend.position = 'bottom') +
+        ggtitle('Mike')
+
+grid.arrange(hofmann, comp_plot, ncol=2)
 ```
 
