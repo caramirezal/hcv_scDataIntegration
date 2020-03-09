@@ -2,10 +2,11 @@
 ## Must be run in the curry cluster
 library(liger)
 #library(Signac)
-#library(Seurat)
+library(Seurat)
 #library(GenomeInfoDb)
 #library(EnsDb.Hsapiens.v75)
-set.seed(1234)
+set.seed(333)
+library(SeuratWrappers)
 
 ## gene expression + atac integration
 run_liger <- function(liger,
@@ -85,36 +86,36 @@ save_liger <- function(ligerex,
 #######################################################################
 ## Integration of Maike to Satpathy
 
-merge <- readRDS('data/merged_himmer_miller.rds')
-merge <- merge[names(merge)!='Miller_dataset']
-satpathy <- readRDS('data/score_activity_matrix_TEx.rds')
-cat('Satpathy dim\n')
-dim(satpathy)
-merge$'satpathy' <- satpathy
-sapply(merge, class)
-names(merge)
+#merge <- readRDS('data/merged_himmer_miller.rds')
+#merge <- merge[names(merge)!='Miller_dataset']
+#satpathy <- readRDS('data/score_activity_matrix_TEx.rds')
+#cat('Satpathy dim\n')
+#dim(satpathy)
+#merge$'satpathy' <- satpathy
+#sapply(merge, class)
+#names(merge)
 #sapply(merge, function(x) head(colnames(x)))
 #sapply(merge, function(x) head(rownames(x)))
 
-liger <- createLiger(merge)
+#liger <- createLiger(merge)
 
 
-cat('Running liger\n')
-run_liger(
-        liger = liger,
-        k = 5, lambda = 0.1,
-        liger_path = 'data/liger_maike_satpathy_lambda=0.1.rds',
-        plot_path = 'figures/liger_maike_satpathy_lambda=0.1.pdf',  
-        interspecies = TRUE
-)
+#cat('Running liger\n')
+#run_liger(
+#        liger = liger,
+#        k = 5, lambda = 0.1,
+#        liger_path = 'data/liger_maike_satpathy_lambda=0.1.rds',
+#        plot_path = 'figures/liger_maike_satpathy_lambda=0.1.pdf',  
+#        interspecies = TRUE
+#)
 
 
-liger <- readRDS('data/liger_maike_satpathy_lambda=0.1.rds')
+#liger <- readRDS('data/liger_maike_satpathy_lambda=0.1.rds')
 ## Saving liger results
-save_liger(
-        ligerex = liger,
-        dir_path = 'data/liger_maike_satpathy_tsne_lambda=0.1.rds'
-)
+#save_liger(
+#        ligerex = liger,
+#        dir_path = 'data/liger_maike_satpathy_tsne_lambda=0.1.rds'
+#)
 
 
 #calcAlignment(liger)
@@ -126,3 +127,38 @@ save_liger(
 #suggestK(liger, k.test=seq(5,10,20), plot.log2=T)
 #dev.off()
 #suggestLambda(liger, k=5)
+
+
+##############################################################################
+##								            ##
+##             Alignment of Hofmann and Satpathy using Seurat               ##
+##                                                                          ##
+##############################################################################
+scores <- readRDS('../data/score_activity_matrix_TEx.rds')
+sam_ann <- readRDS('../data/score_activity_matrix_annotations_TEx.rds')
+
+satpathy_seu <- CreateSeuratObject(
+        counts = scores, 
+        project = 'HCV', 
+        assay = 'SCORES', 
+        min.cells = 1, 
+        min.features = 1
+)
+#satpathy_seu <- NormalizeData(satpathy_seu)
+#satpathy_seu <- FindVariableFeatures(satpathy_seu)
+
+hofmann_seu <- readRDS('../data/integrated_miller_maike_sub.rds')
+
+seu_list <- list(hofmann_seu, satpathy_seu)
+cat('Normalizing data')
+for (i in 1:length(seu_list)){
+    seu_list[[i]] <- NormalizeData(seu_list[[i]])  
+    seu_list[[i]] <- FindVariableFeatures(seu_list[[i]])
+}
+#merge_seu <- merge(seu_list[[1]], seu_list[[2]])
+#merge_seu <- ScaleData(merge_seu, split.by = "orig.ident", do.center = FALSE)
+#merge_seu <- RunOptimizeALS(merge_seu, k = 5, lambda = 5, split.by = "orig.ident")
+#merge_seu <- RunQuantileAlignSNF(merge_seu, split.by = "orig.ident")
+#merge_seu <- RunUMAP(merge_seu, dims = 1:ncol(merge_seu[["iNMF"]]), reduction = "iNMF")
+
+#saveRDS(merge_seu, '../data/hofmann_satpathy_liger_seurat.rds')
