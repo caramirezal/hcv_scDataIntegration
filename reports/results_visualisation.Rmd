@@ -406,3 +406,26 @@ hofmann <- subset(tsne_ann, dataset == 'Hofmann') %>%
 grid.arrange(hofmann, comp_plot, ncol=2)
 ```
 
+## Alignment using Seurat
+
+```{r satpathy_seurat}
+scores <- read_rds('../data/score_activity_matrix_TEx.rds')
+sam_ann <- read_rds('../data/score_activity_matrix_annotations_TEx.rds')
+
+satpathy_seu <- CreateSeuratObject(
+        counts = scores, project = 'HCV', 
+        assay = 'SCORES', 
+        min.cells = 1, 
+        min.features = 1
+)
+```
+
+```{r echo=FALSE}
+satpathy_miller_list_seu <- list(maike_seu, satpathy_seu) 
+for (i in 1:length(satpathy_miller_list_seu)) {
+        satpathy_miller_list_seu[[i]] <- SCTransform(satpathy_miller_list_seu[[i]], 
+                                                     verbose = FALSE)
+}
+```
+
+

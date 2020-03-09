@@ -1,0 +1,33 @@
+---
+title: "Rosemberg et al 2018 EDA"
+author: "Health Data Science Unit"
+date: "1/31/2020"
+output: html_document
+---
+
+##
+
+```{r rosemberg_data, eval=FALSE, echo=FALSE}
+url_rosenmberg <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE119117&format=file&file=GSE119117%5Fcounts%5Fmatrix%2Etxt%2Egz'
+if ( !file.exists('../data/hcv/rosemberg2018/rosemberg.gz')) {
+       download.file(url = url_rosenmberg, 
+                     destfile = '~/sc/singleCellDeconvolution//data/hcv/rosemberg2018/rosemberg.gz')       
+}
+bulk <- read.table('../data/hcv/rosemberg2018/rosemberg.gz')
+
+## metadata 
+## url https://www.ncbi.nlm.nih.gov/Traces/study/?acc=PRJNA488222&o=acc_s%3Aa
+rosemberg_metadata <- read.csv('../data/hcv/rosemberg2018/rosemberg2018_metadata.csv')
+rosemberg_metadata.s <- unique(select(rosemberg_metadata, Sample.Name, time_point))
+series_matrix <- getGEO(filename="~/Downloads/GSE119117_series_matrix.txt")
+sm <- data.frame(geo_acc=series_matrix$geo_accession, sample=series_matrix$`time point:ch1`,
+                 id=series_matrix$title)
+sm <- mutate(sm, id=gsub('-', '.', id))
+```
+
+```{r eval=FALSE, echo=FALSE}
+bulk_umap <- umap(t(bulk), metric = 'cosine')
+bulk_umap.df <- as.data.frame(bulk_umap)
+bulk_umap.df <- mutate(bulk_umap.df, id=colnames(bulk))
+bulk_umap.df <- merge(bulk_umap.df, sm)
+```
