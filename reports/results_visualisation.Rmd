@@ -14,12 +14,16 @@ library(tidyverse)
 library(gridExtra)
 library(dplyr)
 library(reshape2)
+library(msigdbr)
+library(clusterProfiler)
 
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE,
                       fig.align = TRUE,
                       fig.width = 8,
-                      fig.height = 8)
+                      fig.height = 8,
+                      cache = TRUE, 
+                      cache.lazy = FALSE)
 ```
 
 
@@ -131,6 +135,7 @@ top10 <- markers %>%
         arrange(cluster, desc(avg_logFC)) %>% 
         group_by(cluster) %>% 
         top_n(n = 10, wt = avg_logFC) 
+saveRDS(top10, '../data/top10_mike_clusters.rds')
 DoHeatmap(hofmann_seu, features = top10$gene)
 ```
 
@@ -139,6 +144,26 @@ DoHeatmap(hofmann_seu, features = top10$gene)
 * CCL4 is a chemokine expressed in a subpopulation of CD8+ T Cells during chronic exhaustion defined by SIRPalpha ([Myers L et al, 2019](https://www.nature.com/articles/s41467-019-08637-9#Abs1)).
 
 * HMGB2 knockdown inhibits proliferation in gastric cancer cells ([Li J et al, 2017](https://cancerci.biomedcentral.com/articles/10.1186/s12935-017-0408-8)).
+
+
+## Pathway enrichment
+
+```{r}
+m_df <- msigdbr(species = 'Homo sapiens')
+
+m_t2g = m_df %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+path_enrich <- enricher(gene = top10$gene, TERM2GENE = m_t2g)
+```
+
+```{r path_enrich_plot}
+s <- path_enrich
+s@result$GeneRatio <- sapply(path_enrich@result$GeneRatio, function(v) eval(parse(text = v)))
+s@result$BgRatio <- sapply(path_enrich@result$BgRatio, function(v) eval(parse(text = v)))
+dotplot(s, showCategory=20)
+
+slide <- s@result %>% arrange(pvalue) 
+slide[1:10, ] %>% ggplot(aes(x=ID, y=(1/(log(pvalue)+1)))) + geom_bar(stat = 'identity') + coord_flip()
+```
 
 ## Satpathy-Maike datasets alignment using liger
 
@@ -408,7 +433,7 @@ grid.arrange(hofmann, comp_plot, ncol=2)
 
 ## Alignment using Seurat
 
-```{r satpathy_seurat}
+```{r satpathy_seurat, eval=FALSE}
 scores <- read_rds('../data/score_activity_matrix_TEx.rds')
 sam_ann <- read_rds('../data/score_activity_matrix_annotations_TEx.rds')
 
@@ -420,12 +445,5 @@ satpathy_seu <- CreateSeuratObject(
 )
 ```
 
-```{r echo=FALSE}
-satpathy_miller_list_seu <- list(maike_seu, satpathy_seu) 
-for (i in 1:length(satpathy_miller_list_seu)) {
-        satpathy_miller_list_seu[[i]] <- SCTransform(satpathy_miller_list_seu[[i]], 
-                                                     verbose = FALSE)
-}
-```
 
 
