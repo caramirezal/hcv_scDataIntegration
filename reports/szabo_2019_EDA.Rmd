@@ -1,0 +1,13 @@
+---
+title: "Szabo EDA"
+author: "Health Data Science Unit"
+date: "3/11/2020"
+output: html_document
+---
+
+```{r downloading_data}
+url <- 'https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE126030&format=file'
+download.file(url, '../data/szabo2019/GSE126030_RAW.tar')
+untar('../data/szabo2019/GSE126030_RAW.tar', exdir = '../data/szabo2019/')
+list.files('../data/szabo2019/')
+```
