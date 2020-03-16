@@ -10,12 +10,12 @@ output:
 ```{r include=FALSE}
 library(Seurat)
 library(tidyverse)
-library(tidyverse)
 library(gridExtra)
 library(dplyr)
 library(reshape2)
 library(msigdbr)
 library(clusterProfiler)
+library(SeuratWrappers)
 
 knitr::opts_chunk$set(message = FALSE,
                       warning = FALSE,
@@ -148,22 +148,18 @@ DoHeatmap(hofmann_seu, features = top10$gene)
 
 ## Pathway enrichment
 
-```{r}
+```{r results='asis'}
 m_df <- msigdbr(species = 'Homo sapiens')
 
+top10 <- read_rds('../data/top10_mike_clusters.rds')
 m_t2g = m_df %>% dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
 path_enrich <- enricher(gene = top10$gene, TERM2GENE = m_t2g)
+path_enrich_table <- path_enrich@result
+path_enrich_table <- select(path_enrich_table, Description, GeneRatio, BgRatio)
+knitr::kable(path_enrich_table[1:20,], row.names = FALSE)
 ```
 
-```{r path_enrich_plot}
-s <- path_enrich
-s@result$GeneRatio <- sapply(path_enrich@result$GeneRatio, function(v) eval(parse(text = v)))
-s@result$BgRatio <- sapply(path_enrich@result$BgRatio, function(v) eval(parse(text = v)))
-dotplot(s, showCategory=20)
 
-slide <- s@result %>% arrange(pvalue) 
-slide[1:10, ] %>% ggplot(aes(x=ID, y=(1/(log(pvalue)+1)))) + geom_bar(stat = 'identity') + coord_flip()
-```
 
 ## Satpathy-Maike datasets alignment using liger
 
@@ -433,7 +429,7 @@ grid.arrange(hofmann, comp_plot, ncol=2)
 
 ## Alignment using Seurat
 
-```{r satpathy_seurat, eval=FALSE}
+```{r satpathy_seurat}
 scores <- read_rds('../data/score_activity_matrix_TEx.rds')
 sam_ann <- read_rds('../data/score_activity_matrix_annotations_TEx.rds')
 
@@ -443,7 +439,52 @@ satpathy_seu <- CreateSeuratObject(
         min.cells = 1, 
         min.features = 1
 )
+
+anns <- sam_ann %>% select(-Barcodes) %>% rename(Barcodes=Group_Barcodes)
+anns <- merge(anns, satpathy_ann)
+ord <- match(colnames(satpathy_seu), anns$Barcodes)
+anns <- anns[ord, ]
+
+satpathy_seu <- FindVariableFeatures(satpathy_seu, nfeatures = 1000) %>%
+                 NormalizeData() %>%
+                  ScaleData()
+
+satpathy_seu <- RunPCA(satpathy_seu, features = VariableFeatures(satpathy_seu), npcs = 30, verbose = FALSE) 
+satpathy_seu <- RunUMAP(satpathy_seu, reduction = 'pca', dims = 1:10, metric = 'cosine')
+satpathy_seu$'cluster' <- anns$cell_type
+DimPlot(satpathy_seu, reduction = 'umap', group.by = 'cluster')
 ```
 
+```{r}
+seu <- list(satpathy=satpathy_seu, hofmann=hofmann_seu)
+anchors <- FindIntegrationAnchors(object.list = seu, dims = 1:30)
+integrated <- IntegrateData(anchors, dims = 1:30)
+DefaultAssay(integrated) <- 'integrated'
+integrated <- ScaleData(integrated, verbose = FALSE)
+integrated <- RunPCA(integrated, npcs = 30, verbose = FALSE)
+integrated <- RunUMAP(integrated, reduction = "pca", dims = 1:30)
+integrated_sat_ann <- integrated$cluster[!is.na(integrated$cluster)]
+integrated_hof_ann <- integrated$miller_imputations[!is.na(integrated$miller_imputations)]
+integrated_ann <- c(integrated_sat_ann, integrated_hof_ann)
+integrated$"all_anns" <- integrated_ann
+integrated$all_anns <- plyr::mapvalues(integrated$all_anns,
+                                       from = c('Cluster15', 'Cluster16', 'Cluster17'),
+                                       to = c('15-Early TEx', '16-Intermediate TEx', '17-Terminal TEx'))
+DimPlot(integrated, group.by = 'all_anns', reduction = 'umap')
+```
 
+```{r satpathy_top10}
+top10 <- read_rds('../data/top10_mike_clusters.rds')
+satpathy_top10 <- subset(satpathy_seu, features = top10$gene)
+counts_top <- satpathy_top10@assays$SCORES@counts
+head(counts_top)
+scores.mtx <- as.matrix(counts_top)
+colrs <- plyr::mapvalues(anns$cell_type, from = c('Cluster15', 'Cluster16', 'Cluster17'),
+                         to = c('Green', 'Red', 'Blue'))
+
+
+satpathy_seu$'cell_type_annotation' <- integrated_sat_ann
+hofmann_seu$'cell_type_annotation' <- integrated_hof_ann
+saveRDS(object = list(satpathy=satpathy_seu, hofmann=hofmann_seu), file = '~/sc/hcv_scDataIntegration/data/sat_hoff_seu_processed.rds')
+```
 
